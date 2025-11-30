@@ -1,14 +1,14 @@
 app_name = "npd_project_module"
-app_title = "Npd Project Module"
+app_title = "NPD Project Module"
 app_publisher = "Guru107"
-app_description = "Customization on top of existing Project Module in ERPNext"
+app_description = "Customization on top of existing Project Module in ERPNext to support NPD (New Product Development) process in a manufacturing company"
 app_email = "connect@gurudatt.in"
 app_license = "mit"
 
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["erpnext"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
