@@ -43,8 +43,11 @@ required_apps = ["erpnext"]
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_js = {
+	"Project": "public/js/project.js",
+	"Task": "public/js/task.js"
+}
+doctype_list_js = {"Task": "public/js/task_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -86,12 +89,12 @@ required_apps = ["erpnext"]
 # ------------
 
 # before_install = "npd_project_module.install.before_install"
-# after_install = "npd_project_module.install.after_install"
+after_install = "npd_project_module.install.after_install.after_install"
 
 # Uninstallation
 # ------------
 
-# before_uninstall = "npd_project_module.uninstall.before_uninstall"
+before_uninstall = "npd_project_module.uninstall.before_uninstall.before_uninstall"
 # after_uninstall = "npd_project_module.uninstall.after_uninstall"
 
 # Integration Setup
@@ -130,15 +133,9 @@ required_apps = ["erpnext"]
 
 # Document Events
 # ---------------
-# Hook on document methods and events
-
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+# Note: Using client scripts and server scripts instead of doc_events hooks
+# See public/js/project.js and public/js/task.js for client-side handlers
+# See utils/project_utils.py and utils/task_utils.py for server-side methods
 
 # Scheduled Tasks
 # ---------------
@@ -172,6 +169,15 @@ required_apps = ["erpnext"]
 # Specify custom mixins to extend the standard doctype controller.
 # extend_doctype_class = {
 # 	"Task": "npd_project_module.custom.task.CustomTaskMixin"
+# }
+
+# Override DocType Class
+# ------------------------------
+#
+# Override the standard doctype controller with custom implementation.
+# Note: Using doc_events instead of override_doctype_class for Project
+# override_doctype_class = {
+# 	"Project": "npd_project_module.custom.doctype.project.project.Project"
 # }
 
 # Overriding Methods
