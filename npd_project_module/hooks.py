@@ -43,10 +43,7 @@ required_apps = ["erpnext"]
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {
-	"Project": "public/js/project.js",
-	"Task": "public/js/task.js"
-}
+doctype_js = {"Project": "public/js/project.js", "Task": "public/js/task.js"}
 doctype_list_js = {"Task": "public/js/task_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -255,4 +252,3 @@ before_uninstall = "npd_project_module.uninstall.before_uninstall.before_uninsta
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-

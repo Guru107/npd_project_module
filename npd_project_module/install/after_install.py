@@ -33,7 +33,7 @@ def create_task_custom_fields():
 				"in_standard_filter": 1,
 				"in_global_search": 1,
 				"translatable": 0,
-				"description": "Item (part) associated with this task"
+				"description": "Item (part) associated with this task",
 			},
 			{
 				"fieldname": "iteration_number",
@@ -45,8 +45,8 @@ def create_task_custom_fields():
 				"read_only": 1,
 				"default": "0",
 				"non_negative": 1,
-				"description": "Iteration number for this task (system-managed)"
-			}
+				"description": "Iteration number for this task (system-managed)",
+			},
 		]
 	}
 
@@ -66,7 +66,7 @@ def create_project_custom_fields():
 				"label": "Part Numbers",
 				"fieldtype": "Section Break",
 				"insert_after": "project_template",
-				"collapsible": 0
+				"collapsible": 0,
 			},
 			{
 				"fieldname": "part_numbers",
@@ -74,8 +74,8 @@ def create_project_custom_fields():
 				"fieldtype": "Table",
 				"insert_after": "part_numbers_section",
 				"options": "Project Part Number",
-				"description": "Add part numbers to track multiple parts in this project"
-			}
+				"description": "Add part numbers to track multiple parts in this project",
+			},
 		]
 	}
 
@@ -100,7 +100,7 @@ def create_item_custom_fields():
 				"in_standard_filter": 1,
 				"in_global_search": 1,
 				"translatable": 0,
-				"description": "Project this item (part) belongs to"
+				"description": "Project this item (part) belongs to",
 			}
 		]
 	}
@@ -108,4 +108,3 @@ def create_item_custom_fields():
 	# Create custom fields (function is idempotent - checks for existing fields)
 	create_custom_fields(custom_fields, update=True)
 	print("  ✓ Custom field for Item doctype created")
-

@@ -5,4 +5,3 @@ frappe.ui.form.on("Project Part Number", {
 	// refresh: function(frm) {
 	// }
 });
-

@@ -19,4 +19,3 @@ class ProjectPartNumber(Document):
 	# end: auto-generated types
 
 	pass
-
