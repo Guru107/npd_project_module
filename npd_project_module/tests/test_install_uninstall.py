@@ -19,7 +19,10 @@ def _custom_field_filters():
 	"""Return filters used for counting module custom fields."""
 	return {
 		"dt": ["in", ["Task", "Project", "Item"]],
-		"fieldname": ["in", ["part_number", "iteration_number", "part_numbers_section", "part_numbers", "project"]],
+		"fieldname": [
+			"in",
+			["part_number", "iteration_number", "part_numbers_section", "part_numbers", "project"],
+		],
 	}
 
 
@@ -64,8 +67,6 @@ def _ensure_report_exists():
 
 
 class TestInstallUninstall(IntegrationTestCase):
-	"""Covers Tasks 7.9–7.13 as proper Frappe integration tests."""
-
 	def setUp(self):
 		# Ensure a fresh install state before each test
 		after_install()
@@ -126,7 +127,9 @@ class TestInstallUninstall(IntegrationTestCase):
 		if _template_exists():
 			final_task_count = len(frappe.get_doc("Project Template", "NPD Template").tasks or [])
 			self.assertEqual(final_task_count, 18, "Template must retain 18 tasks")
-			self.assertEqual(initial_task_count, final_task_count, "Template task count should remain unchanged")
+			self.assertEqual(
+				initial_task_count, final_task_count, "Template task count should remain unchanged"
+			)
 
 	def test_uninstallation_cleanup(self):
 		"""Task 7.11: before_uninstall should remove module artifacts."""
@@ -208,4 +211,3 @@ class TestInstallUninstall(IntegrationTestCase):
 		# Restore for subsequent tests
 		after_install()
 		frappe.db.commit()
-

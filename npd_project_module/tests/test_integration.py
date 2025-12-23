@@ -379,9 +379,7 @@ class TestIntegrationWorkflows(NPDProjectModuleTestSuite):
 		item = make_test_item("_Test Integration Start Stage")
 		self.test_items.append(item)
 
-		project = make_test_project_with_parts(
-			"_Test Integration Start Stage Project", [item.item_code]
-		)
+		project = make_test_project_with_parts("_Test Integration Start Stage Project", [item.item_code])
 		self.test_projects.append(project.project_name)
 
 		# Create initial iteration
@@ -431,4 +429,3 @@ class TestIntegrationWorkflows(NPDProjectModuleTestSuite):
 		if tasks_iter_1_ordered:
 			task = frappe.get_doc("Task", tasks_iter_1_ordered[0]["name"])
 			self.assertIn("Internal Team Technical Feasibility", task.subject)
-

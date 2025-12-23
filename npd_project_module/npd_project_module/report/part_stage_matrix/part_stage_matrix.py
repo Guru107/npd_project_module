@@ -178,9 +178,7 @@ class PartStageMatrix:
 
 		# Check if stage is completed in any iteration (aggregate across iterations)
 		completed_tasks = [
-			t
-			for t in part_tasks
-			if self.is_stage_task(t, stage_name) and t.get("status") == "Completed"
+			t for t in part_tasks if self.is_stage_task(t, stage_name) and t.get("status") == "Completed"
 		]
 
 		if completed_tasks:
@@ -192,10 +190,7 @@ class PartStageMatrix:
 		# Get task for this stage in latest iteration
 		latest_task = None
 		for t in part_tasks:
-			if (
-				t.get("iteration_number") == latest_iteration
-				and self.is_stage_task(t, stage_name)
-			):
+			if t.get("iteration_number") == latest_iteration and self.is_stage_task(t, stage_name):
 				latest_task = t
 				break
 
@@ -210,9 +205,7 @@ class PartStageMatrix:
 				# Check if previous stage exists in any iteration
 				if stage_index > 0 and self.task_sequence:
 					prev_stage_name = self.task_sequence[stage_index - 1]
-					prev_stage_exists = any(
-						self.is_stage_task(t, prev_stage_name) for t in part_tasks
-					)
+					prev_stage_exists = any(self.is_stage_task(t, prev_stage_name) for t in part_tasks)
 					if not prev_stage_exists:
 						return "Not Started"
 					else:
@@ -262,10 +255,7 @@ class PartStageMatrix:
 		prev_stage_task = None
 
 		for t in part_tasks:
-			if (
-				t.get("iteration_number") == iteration_number
-				and self.is_stage_task(t, prev_stage_name)
-			):
+			if t.get("iteration_number") == iteration_number and self.is_stage_task(t, prev_stage_name):
 				prev_stage_task = t
 				break
 
@@ -315,10 +305,9 @@ class PartStageMatrix:
 					return True  # Dependency task not found, consider blocked
 
 			# Only check dependencies within the same part and iteration
-			if (
-				dep_task.get("part_number") == task.get("part_number")
-				and dep_task.get("iteration_number") == task.get("iteration_number")
-			):
+			if dep_task.get("part_number") == task.get("part_number") and dep_task.get(
+				"iteration_number"
+			) == task.get("iteration_number"):
 				# Check if dependency is completed or cancelled
 				if dep_task.get("status") not in ("Completed", "Cancelled"):
 					return True  # Dependency not met
@@ -372,4 +361,3 @@ def get_task_details(project, part_number, stage_name):
 			stage_tasks.append(task)
 
 	return stage_tasks
-

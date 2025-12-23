@@ -301,4 +301,3 @@ class TestTaskUtils(NPDProjectModuleTestSuite):
 		result = check_task_blocked_status(task_names)
 		if len(task_names) > 1:
 			self.assertFalse(result.get(task_names[1], True))
-

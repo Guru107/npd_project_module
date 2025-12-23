@@ -50,13 +50,11 @@ frappe.listview_settings["Task"] = {
 			listview.page.add_menu_item(__("Show Cancelled Tasks"), function () {
 				// Show only cancelled tasks by setting status = Cancelled filter
 				// First, remove any existing status filters
-				console.log("Show Cancelled Tasks");
 				const filters = listview.filter_area.get();
-				console.log("filters", filters);
 				const new_filters = filters.filter((f) => {
 					return !f.includes("status");
 				});
-				new_filters.push(["Task", "status", "in", ["Cancelled,"], false]);
+				new_filters.push(["Task", "status", "in", ["Cancelled"], false]);
 				listview.filter_area
 					.clear(false)
 					.then(function () {
@@ -71,15 +69,11 @@ frappe.listview_settings["Task"] = {
 			listview.page.add_menu_item(__("Hide Cancelled Tasks"), function () {
 				// Hide cancelled tasks by setting status != Cancelled filter
 				// First, remove any existing status filters
-				console.log("Hide Cancelled Tasks");
 				const filters = listview.filter_area.get();
-				console.log("filters", filters);
 				const new_filters = filters.filter((f) => {
-					console.log("f", f);
 					return !f.includes("status");
 				});
-				new_filters.push(["Task", "status", "not in", ["Cancelled,"], false]);
-				console.log("new_filters", new_filters);
+				new_filters.push(["Task", "status", "not in", ["Cancelled"], false]);
 				listview.filter_area
 					.clear(false)
 					.then(function () {

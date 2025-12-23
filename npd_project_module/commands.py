@@ -7,7 +7,7 @@ Bench commands for NPD Project Module
 
 import click
 import frappe
-from frappe.commands import pass_context, get_site
+from frappe.commands import get_site, pass_context
 
 
 @click.command("create-npd-template")
@@ -38,4 +38,3 @@ def create_npd_template_command(context, site=None):
 
 
 commands = [create_npd_template_command]
-

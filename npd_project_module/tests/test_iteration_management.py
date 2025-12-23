@@ -130,9 +130,7 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		)
 
 		# All tasks should be incomplete initially
-		incomplete_count = get_incomplete_tasks_count(
-			self.test_project.name, self.test_item.item_code, 0
-		)
+		incomplete_count = get_incomplete_tasks_count(self.test_project.name, self.test_item.item_code, 0)
 		self.assertEqual(incomplete_count, 18)
 
 		# Complete first task
@@ -151,9 +149,7 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 			frappe.db.commit()
 
 		# Count should decrease
-		incomplete_count = get_incomplete_tasks_count(
-			self.test_project.name, self.test_item.item_code, 0
-		)
+		incomplete_count = get_incomplete_tasks_count(self.test_project.name, self.test_item.item_code, 0)
 		self.assertEqual(incomplete_count, 17)
 
 	def test_get_cancelled_task_for_part(self):
@@ -183,9 +179,7 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 			frappe.db.commit()
 
 		# Find cancelled task
-		cancelled_task = get_cancelled_task_for_part(
-			self.test_project.name, self.test_item.item_code
-		)
+		cancelled_task = get_cancelled_task_for_part(self.test_project.name, self.test_item.item_code)
 		self.assertIsNotNone(cancelled_task)
 		self.assertEqual(cancelled_task["iteration_number"], 0)
 
@@ -246,9 +240,7 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		)
 
 		# Mark as obsolete
-		obsoleted_count = mark_tasks_as_obsolete(
-			self.test_project.name, self.test_item.item_code, 0
-		)
+		obsoleted_count = mark_tasks_as_obsolete(self.test_project.name, self.test_item.item_code, 0)
 		self.assertEqual(obsoleted_count, 18)
 
 		# Verify tasks are cancelled
@@ -366,4 +358,3 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		# Should fail to create 11th iteration
 		with self.assertRaises(frappe.ValidationError):
 			create_new_iteration(self.test_project.name, self.test_item.item_code)
-

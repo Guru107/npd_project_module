@@ -238,4 +238,3 @@ class NPDProjectModuleTestSuite(IntegrationTestCase):
 		cleanup_test_data(item_codes=item_codes)
 
 		super().tearDown()
-

@@ -65,9 +65,7 @@ class TestProjectUtils(NPDProjectModuleTestSuite):
 		self.test_projects.append(project1.project_name)
 
 		# Try to assign same item to second project
-		result = validate_project_parts(
-			project_name="Test Project 2", part_numbers=[item.item_code]
-		)
+		result = validate_project_parts(project_name="Test Project 2", part_numbers=[item.item_code])
 		self.assertFalse(result["valid"])
 		self.assertIn("already belongs to", result["message"])
 
@@ -128,9 +126,7 @@ class TestProjectUtils(NPDProjectModuleTestSuite):
 		self.test_items.extend([item1, item2])
 
 		# Create project with two parts
-		project = make_test_project_with_parts(
-			"_Test Project Remove", [item1.item_code, item2.item_code]
-		)
+		project = make_test_project_with_parts("_Test Project Remove", [item1.item_code, item2.item_code])
 		self.test_projects.append(project.project_name)
 
 		# Remove second part
@@ -156,10 +152,7 @@ class TestProjectUtils(NPDProjectModuleTestSuite):
 		self.test_items.extend([item1, item2])
 
 		# Create project with parts and tasks
-		project = make_test_project_with_parts(
-			"_Test Project Delete", [item1.item_code, item2.item_code]
-		)
-		project_name = project.project_name
+		project = make_test_project_with_parts("_Test Project Delete", [item1.item_code, item2.item_code])
 
 		# Trigger task generation
 		part_numbers_data = [
@@ -201,4 +194,3 @@ class TestProjectUtils(NPDProjectModuleTestSuite):
 		result = handle_project_save(project.name, '{"not": "a list"}', is_new=True)
 		self.assertFalse(result["success"])
 		self.assertIn("part_numbers_data must be a list", result["message"])
-

@@ -188,4 +188,3 @@ frappe.query_reports["Part Stage Matrix"] = {
 		dialog.show();
 	},
 };
-

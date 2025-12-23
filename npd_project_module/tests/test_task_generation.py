@@ -251,4 +251,3 @@ class TestTaskGeneration(NPDProjectModuleTestSuite):
 		# Test missing part number
 		with self.assertRaises(frappe.ValidationError):
 			generate_tasks_for_part(project_name="Test", part_number=None, iteration_number=0)
-
