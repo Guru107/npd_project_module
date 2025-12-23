@@ -6,11 +6,15 @@ import frappe
 
 def before_uninstall():
 	"""
-	Clean up custom fields and configurations before app uninstallation.
+	Clean up custom fields, configurations, templates, reports, and doctypes before app uninstallation.
+	This function is idempotent - it checks for existence before attempting deletion.
 	"""
 	print("NPD Project Module: Starting cleanup...")
 
 	remove_custom_fields()
+	remove_npd_template()
+	remove_custom_report()
+	remove_custom_doctype()
 	frappe.db.commit()
 
 	print("NPD Project Module: Cleanup completed successfully")
@@ -47,3 +51,66 @@ def remove_custom_fields():
 	frappe.clear_cache(doctype="Project")
 	frappe.clear_cache(doctype="Item")
 	print("  ✓ Cache cleared for Task, Project, and Item doctypes")
+
+
+def remove_npd_template():
+	"""
+	Remove the NPD Template (Project Template) created by this module.
+	"""
+	template_name = "NPD Template"
+	try:
+		if frappe.db.exists("Project Template", template_name):
+			# Check if template has tasks that belong to this module
+			template = frappe.get_doc("Project Template", template_name)
+			# Delete template tasks first (if they exist and are not linked to real projects)
+			if template.tasks:
+				for task_link in template.tasks:
+					task_name = task_link.task
+					# Check if task is used in any real project
+					used_in_projects = frappe.db.count(
+						"Task", filters={"name": task_name, "project": ["is", "set"]}
+					)
+					if not used_in_projects:
+						# Task is only a template, safe to delete
+						try:
+							frappe.delete_doc("Task", task_name, force=True, ignore_permissions=True)
+						except Exception:
+							pass  # Task might already be deleted or in use
+
+			# Delete the template itself
+			frappe.delete_doc("Project Template", template_name, force=True, ignore_permissions=True)
+			print(f"  ✓ Removed NPD Template: {template_name}")
+	except Exception as e:
+		print(f"  ✗ Error removing NPD Template: {e!s}")
+
+
+def remove_custom_report():
+	"""
+	Remove the Part Stage Matrix report created by this module.
+	"""
+	report_name = "Part Stage Matrix"
+	try:
+		if frappe.db.exists("Report", report_name):
+			frappe.delete_doc("Report", report_name, force=True, ignore_permissions=True, ignore_missing=True)
+			print(f"  ✓ Removed custom report: {report_name}")
+	except Exception as e:
+		print(f"  ✗ Error removing report {report_name}: {e!s}")
+
+
+def remove_custom_doctype():
+	"""
+	Remove the Project Part Number child table doctype created by this module.
+	Note: Frappe automatically removes doctypes when uninstalling the app,
+	but we include this for explicit cleanup and verification.
+	"""
+	doctype_name = "Project Part Number"
+	try:
+		if frappe.db.exists("DocType", doctype_name):
+			# Check if doctype has any data
+			table_name = frappe.db.get_value("DocType", doctype_name, "name")
+			if table_name:
+				# Frappe will handle the actual deletion during uninstall
+				# We just verify it exists and log
+				print("  ✓ Project Part Number doctype will be removed by Frappe")
+	except Exception as e:
+		print(f"  ✗ Error checking doctype {doctype_name}: {e!s}")

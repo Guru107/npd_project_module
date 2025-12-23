@@ -11,7 +11,7 @@ Displays the status of each stage for each part, aggregating across iterations.
 import frappe
 from frappe import _
 
-from npd_project_module.utils.task_generation import NPD_TASK_SEQUENCE
+from npd_project_module.utils.task_generation import get_task_sequence_from_template
 
 
 def execute(filters=None):
@@ -34,6 +34,7 @@ class PartStageMatrix:
 		self.filters = frappe._dict(filters or {})
 		self.project = self.filters.get("project")
 		self.part_numbers = self.filters.get("part_number") or []
+		self.task_sequence = None  # Will be set in get_data()
 
 	def run(self):
 		"""Run the report and return formatted data."""
@@ -112,12 +113,15 @@ class PartStageMatrix:
 		if not parts:
 			return
 
+		# Get task sequence from Project Template and store as instance variable
+		self.task_sequence = get_task_sequence_from_template(project_name=self.project)
+
 		# Get all tasks for this project and parts
 		part_codes = [p.get("name") for p in parts]
 		tasks = self.get_tasks(part_codes)
 
 		# Build matrix: for each stage, get status for each part
-		for stage_index, stage_name in enumerate(NPD_TASK_SEQUENCE):
+		for stage_index, stage_name in enumerate(self.task_sequence):
 			row = {"stage": stage_name}
 
 			for part in parts:
@@ -160,7 +164,7 @@ class PartStageMatrix:
 		Args:
 			tasks (list): All tasks for the project
 			part_code (str): Part/Item code
-			stage_index (int): Index of stage in NPD_TASK_SEQUENCE
+			stage_index (int): Index of stage in task sequence
 			stage_name (str): Name of the stage
 
 		Returns:
@@ -204,8 +208,8 @@ class PartStageMatrix:
 				return "Not Started"
 			else:
 				# Check if previous stage exists in any iteration
-				if stage_index > 0:
-					prev_stage_name = NPD_TASK_SEQUENCE[stage_index - 1]
+				if stage_index > 0 and self.task_sequence:
+					prev_stage_name = self.task_sequence[stage_index - 1]
 					prev_stage_exists = any(
 						self.is_stage_task(t, prev_stage_name) for t in part_tasks
 					)
@@ -236,12 +240,15 @@ class PartStageMatrix:
 		"""Check if a task belongs to a specific stage."""
 		subject = task.get("subject", "")
 		# Task subject format: "[Item Name] [Stage Name]"
-		# Extract stage name from subject
-		parts = subject.rsplit(" ", 1) if " " in subject else [subject]
-		if len(parts) >= 2:
-			task_stage = parts[-1]
-			return task_stage == stage_name
-		return False
+		# Since stage names can have multiple words (e.g., "RFQ Data", "Internal Team Technical Feasibility"),
+		# we check if the subject ends with the stage name
+		if not subject or not stage_name:
+			return False
+		# Check if subject ends with " [Stage Name]" (space + stage name) to avoid false matches
+		# For example, "Part-001 RFQ Data" should match "RFQ Data"
+		# But "Part-001 Comparison of TKO & RFQ Data" should NOT match "RFQ Data"
+		# Format: "[Item Name] [Stage Name]"
+		return subject == stage_name or subject.endswith(" " + stage_name)
 
 	def check_if_blocked(self, part_tasks, stage_index, iteration_number):
 		"""Check if a stage is blocked due to unmet dependencies."""
@@ -249,7 +256,9 @@ class PartStageMatrix:
 			return "Not Started"  # RFQ Data is never blocked
 
 		# Check if previous stage is completed in this iteration
-		prev_stage_name = NPD_TASK_SEQUENCE[stage_index - 1]
+		if not self.task_sequence or stage_index < 1:
+			return "Not Started"
+		prev_stage_name = self.task_sequence[stage_index - 1]
 		prev_stage_task = None
 
 		for t in part_tasks:
@@ -354,8 +363,12 @@ def get_task_details(project, part_number, stage_name):
 	stage_tasks = []
 	for task in tasks:
 		subject = task.get("subject", "")
-		# Extract stage name from subject (format: "[Item Name] [Stage Name]")
-		if stage_name in subject:
+		# Task subject format: "[Item Name] [Stage Name]"
+		# Check if subject ends with " [Stage Name]" (space + stage name) to handle multi-word stage names correctly
+		# This avoids false matches (e.g., "Comparison of TKO & RFQ Data" matching "RFQ Data")
+		if not subject or not stage_name:
+			continue
+		if subject == stage_name or subject.endswith(" " + stage_name):
 			stage_tasks.append(task)
 
 	return stage_tasks

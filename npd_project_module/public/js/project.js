@@ -121,26 +121,26 @@ frappe.ui.form.on("Project", {
 				}
 
 				if (Array.isArray(part_numbers) && part_numbers.length > 0) {
-				if (typeof frm.add_custom_button === "function") {
-					frm.add_custom_button(
-						__("Create New Iteration"),
-						function () {
-							show_iteration_dialog(frm);
-						},
-						__("Actions")
-					);
+					if (typeof frm.add_custom_button === "function") {
+						frm.add_custom_button(
+							__("Create New Iteration"),
+							function () {
+								show_iteration_dialog(frm);
+							},
+							__("Actions")
+						);
 
-					// Add button to view Part Stage Matrix report
-					frm.add_custom_button(
-						__("Part Stage Matrix"),
-						function () {
-							frappe.set_route("query-report", "Part Stage Matrix", {
-								project: frm.doc.name,
-							});
-						},
-						__("View Reports")
-					);
-				}
+						// Add button to view Part Stage Matrix report
+						frm.add_custom_button(
+							__("Part Stage Matrix"),
+							function () {
+								frappe.set_route("query-report", "Part Stage Matrix", {
+									project: frm.doc.name,
+								});
+							},
+							__("View Reports")
+						);
+					}
 				}
 			}
 		} catch (e) {

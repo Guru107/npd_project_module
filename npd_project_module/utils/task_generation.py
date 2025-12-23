@@ -8,7 +8,8 @@ Utility functions for automatic task generation with dependencies.
 import frappe
 from frappe import _
 
-# List of 18 tasks in sequential order for New Part Development Process
+# Fallback list of 18 tasks in sequential order for New Part Development Process
+# This is used if Project Template is not available (backward compatibility)
 NPD_TASK_SEQUENCE = [
 	"RFQ Data",
 	"Internal Team Technical Feasibility",
@@ -29,6 +30,89 @@ NPD_TASK_SEQUENCE = [
 	"APQP",
 	"Handover to Production",
 ]
+
+
+def get_task_sequence_from_template(project_name=None, template_name=None):
+	"""
+	Get task sequence from Project Template.
+
+	Args:
+		project_name (str, optional): Name of the Project document. If provided,
+			will fetch template from project.project_template field.
+		template_name (str, optional): Name of the Project Template. If provided,
+			will use this template directly. Defaults to "NPD Template".
+
+	Returns:
+		list: List of task names (subjects) in sequence
+
+	Raises:
+		frappe.ValidationError: If template not found or has no tasks
+	"""
+	# Determine which template to use
+	if project_name:
+		project_template = frappe.db.get_value("Project", project_name, "project_template")
+		if project_template:
+			template_name = project_template
+
+	if not template_name:
+		template_name = "NPD Template"
+
+	# Check if template exists
+	if not frappe.db.exists("Project Template", template_name):
+		frappe.log_error(
+			f"Project Template '{template_name}' not found. Using fallback sequence.",
+			"Task Generation Warning",
+		)
+		return NPD_TASK_SEQUENCE
+
+	# Get template document
+	template = frappe.get_doc("Project Template", template_name)
+
+	# Check if template is disabled
+	if template.disabled:
+		frappe.log_error(
+			f"Project Template '{template_name}' is disabled. Using fallback sequence.",
+			"Task Generation Warning",
+		)
+		return NPD_TASK_SEQUENCE
+
+	# Check if template has tasks
+	if not template.tasks:
+		frappe.log_error(
+			f"Project Template '{template_name}' has no tasks. Using fallback sequence.",
+			"Task Generation Warning",
+		)
+		return NPD_TASK_SEQUENCE
+
+	# Extract task subjects in order
+	task_sequence = []
+	for task_row in template.tasks:
+		# Get the Task document to get its subject
+		task_subject = frappe.db.get_value("Task", task_row.task, "subject")
+		if task_subject:
+			task_sequence.append(task_subject)
+
+	if not task_sequence:
+		frappe.log_error(
+			f"Project Template '{template_name}' has no valid tasks. Using fallback sequence.",
+			"Task Generation Warning",
+		)
+		return NPD_TASK_SEQUENCE
+
+	return task_sequence
+
+
+def get_npd_task_sequence(project_name=None):
+	"""
+	Get NPD task sequence. This function provides backward compatibility.
+
+	Args:
+		project_name (str, optional): Name of the Project document
+
+	Returns:
+		list: List of task names in sequence
+	"""
+	return get_task_sequence_from_template(project_name=project_name)
 
 
 def generate_tasks_for_part(project_name, part_number, iteration_number=0):
@@ -62,6 +146,9 @@ def generate_tasks_for_part(project_name, part_number, iteration_number=0):
 	# Get Item name for task naming
 	item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
 
+	# Get task sequence from Project Template
+	task_sequence = get_task_sequence_from_template(project_name=project_name)
+
 	# Set flag to indicate we're in task generation (to skip hooks)
 	frappe.flags.in_task_generation = True
 
@@ -70,7 +157,7 @@ def generate_tasks_for_part(project_name, part_number, iteration_number=0):
 		created_tasks = []
 		previous_task_name = None
 
-		for _index, task_name in enumerate(NPD_TASK_SEQUENCE):
+		for _index, task_name in enumerate(task_sequence):
 			# Format task name: "[Item Name] [Task Name]"
 			full_task_name = f"{item_name} {task_name}"
 

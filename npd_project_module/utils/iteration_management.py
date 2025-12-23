@@ -8,7 +8,7 @@ Utility functions for iteration management in NPD Project Module.
 import frappe
 from frappe import _
 
-from npd_project_module.utils.task_generation import NPD_TASK_SEQUENCE, generate_tasks_for_part
+from npd_project_module.utils.task_generation import generate_tasks_for_part, get_task_sequence_from_template
 
 
 @frappe.whitelist()
@@ -26,7 +26,7 @@ def get_cancelled_task_for_part(project_name, part_number):
 			"task_name": str,
 			"task_subject": str,
 			"iteration_number": int,
-			"task_index": int  # Index in NPD_TASK_SEQUENCE
+			"task_index": int  # Index in task sequence
 		}
 	"""
 	if not project_name or not part_number:
@@ -51,10 +51,15 @@ def get_cancelled_task_for_part(project_name, part_number):
 	# Find the first cancelled task in the sequence
 	item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
 
+	# Get task sequence from Project Template
+	task_sequence = get_task_sequence_from_template(project_name=project_name)
+	if not task_sequence:
+		return None
+
 	for task in tasks:
 		if task.status == "Cancelled":
 			# Find which task in the sequence this is
-			for index, task_name in enumerate(NPD_TASK_SEQUENCE):
+			for index, task_name in enumerate(task_sequence):
 				expected_subject = f"{item_name} {task_name}"
 				if task.subject == expected_subject:
 					return {
@@ -203,7 +208,12 @@ def get_iteration_info(project_name, part_number):
 	# New iteration always starts from the 2nd stage: "Internal Team Technical Feasibility"
 	# RFQ Data (1st stage) is never cancelled and will always be completed
 	item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
-	start_task_name = NPD_TASK_SEQUENCE[1]  # Index 1 = "Internal Team Technical Feasibility"
+
+	# Get task sequence from Project Template
+	task_sequence = get_task_sequence_from_template(project_name=project_name)
+	if not task_sequence or len(task_sequence) < 2:
+		frappe.throw(_("Project Template must have at least 2 tasks"))
+	start_task_name = task_sequence[1]  # Index 1 = "Internal Team Technical Feasibility"
 	start_task_subject = f"{item_name} {start_task_name}"
 
 	new_iteration_start_task = {
@@ -277,7 +287,12 @@ def create_new_iteration(project_name, part_number):
 	# Always start from the 2nd stage (index 1): "Internal Team Technical Feasibility"
 	# RFQ Data (index 0) is never cancelled and will always be completed
 	start_index = 1
-	start_task_name = NPD_TASK_SEQUENCE[start_index]
+
+	# Get task sequence from Project Template
+	task_sequence = get_task_sequence_from_template(project_name=project_name)
+	if not task_sequence or len(task_sequence) < 2:
+		frappe.throw(_("Project Template must have at least 2 tasks"))
+	start_task_name = task_sequence[start_index]
 
 	# Generate tasks starting from the 2nd stage
 	tasks_created = generate_tasks_from_cancelled_task(
@@ -320,7 +335,7 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 		project_name (str): Name of the Project document
 		part_number (str): Item code/name (part number)
 		iteration_number (int): New iteration number
-		start_index (int): Index in NPD_TASK_SEQUENCE to start from
+		start_index (int): Index in task sequence to start from
 
 	Returns:
 		list: List of created Task document names
@@ -328,7 +343,12 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 	if not project_name or not part_number:
 		frappe.throw(_("Project name and part number are required"))
 
-	if start_index < 0 or start_index >= len(NPD_TASK_SEQUENCE):
+	# Get task sequence from Project Template
+	task_sequence = get_task_sequence_from_template(project_name=project_name)
+	if not task_sequence:
+		frappe.throw(_("Project Template not found or has no tasks"))
+
+	if start_index < 0 or start_index >= len(task_sequence):
 		frappe.throw(_("Invalid start index for task generation"))
 
 	# Check if tasks already exist for this part and iteration
@@ -352,8 +372,8 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 		created_tasks = []
 		previous_task_name = None
 
-		for index in range(start_index, len(NPD_TASK_SEQUENCE)):
-			task_name = NPD_TASK_SEQUENCE[index]
+		for index in range(start_index, len(task_sequence)):
+			task_name = task_sequence[index]
 			full_task_name = f"{item_name} {task_name}"
 
 			# Create task document

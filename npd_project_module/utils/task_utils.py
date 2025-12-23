@@ -9,7 +9,7 @@ These functions are called from client scripts and server scripts.
 import frappe
 from frappe import _
 
-from npd_project_module.utils.task_generation import NPD_TASK_SEQUENCE
+from npd_project_module.utils.task_generation import get_task_sequence_from_template
 
 
 @frappe.whitelist()
@@ -30,12 +30,16 @@ def validate_task_cancellation(task_name, part_number, subject):
 		return {"valid": True}
 
 	try:
-		from npd_project_module.utils.task_generation import NPD_TASK_SEQUENCE
+		# Get project name from task
+		project_name = frappe.db.get_value("Task", task_name, "project")
+		task_sequence = get_task_sequence_from_template(project_name=project_name)
 
 		item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
 
 		# Check if this is RFQ Data (first task, index 0)
-		rfq_task_name = NPD_TASK_SEQUENCE[0]  # "RFQ Data"
+		if not task_sequence:
+			return {"valid": True}
+		rfq_task_name = task_sequence[0]  # "RFQ Data"
 		expected_rfq_subject = f"{item_name} {rfq_task_name}"
 
 		if subject == expected_rfq_subject:
@@ -142,9 +146,14 @@ def handle_task_cancellation(task_name, part_number, iteration_number, project_n
 		current_task_subject = task_doc.subject
 		item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
 
+		# Get task sequence from Project Template
+		task_sequence = get_task_sequence_from_template(project_name=project_name)
+		if not task_sequence:
+			return {"success": True, "cancelled_count": 0}
+
 		# Find current task's position in sequence
 		current_task_index = None
-		for index, task_name_item in enumerate(NPD_TASK_SEQUENCE):
+		for index, task_name_item in enumerate(task_sequence):
 			expected_subject = f"{item_name} {task_name_item}"
 			if current_task_subject == expected_subject:
 				current_task_index = index
@@ -176,7 +185,7 @@ def handle_task_cancellation(task_name, part_number, iteration_number, project_n
 
 			# Find task's position in sequence
 			task_index = None
-			for index, task_name_item in enumerate(NPD_TASK_SEQUENCE):
+			for index, task_name_item in enumerate(task_sequence):
 				expected_subject = f"{item_name} {task_name_item}"
 				if task_doc_item.subject == expected_subject:
 					task_index = index

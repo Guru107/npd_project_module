@@ -48,56 +48,46 @@ frappe.listview_settings["Task"] = {
 		if (!listview._npd_menu_items_added) {
 			// Add menu item to show cancelled tasks
 			listview.page.add_menu_item(__("Show Cancelled Tasks"), function () {
-				// Remove the "status != Cancelled" filter
+				// Show only cancelled tasks by setting status = Cancelled filter
+				// First, remove any existing status filters
+				console.log("Show Cancelled Tasks");
 				const filters = listview.filter_area.get();
-				const new_filters = filters.filter(function (f) {
-					// Remove the filter that excludes cancelled tasks
-					// Handle both [doctype, field, operator, value] and [field, operator, value] formats
-					if (Array.isArray(f) && f.length >= 3) {
-						const field_idx = f.length === 4 ? 1 : 0;
-						const op_idx = f.length === 4 ? 2 : 1;
-						const val_idx = f.length === 4 ? 3 : 2;
-						return !(
-							f[field_idx] === "status" &&
-							f[op_idx] === "!=" &&
-							f[val_idx] === "Cancelled"
-						);
-					}
-					return true;
+				console.log("filters", filters);
+				const new_filters = filters.filter((f) => {
+					return !f.includes("status");
 				});
-				listview.filter_area.set(new_filters);
-				listview.refresh();
+				new_filters.push(["Task", "status", "in", ["Cancelled,"], false]);
+				listview.filter_area
+					.clear(false)
+					.then(function () {
+						return listview.filter_area.set(new_filters);
+					})
+					.then(function () {
+						listview.refresh();
+					});
 			});
 
 			// Add menu item to hide cancelled tasks (restore default)
 			listview.page.add_menu_item(__("Hide Cancelled Tasks"), function () {
-				// Add the "status != Cancelled" filter if not already present
+				// Hide cancelled tasks by setting status != Cancelled filter
+				// First, remove any existing status filters
+				console.log("Hide Cancelled Tasks");
 				const filters = listview.filter_area.get();
-				const has_cancelled_filter = filters.some(function (f) {
-					if (Array.isArray(f) && f.length >= 3) {
-						const field_idx = f.length === 4 ? 1 : 0;
-						const op_idx = f.length === 4 ? 2 : 1;
-						const val_idx = f.length === 4 ? 3 : 2;
-						return (
-							f[field_idx] === "status" &&
-							f[op_idx] === "!=" &&
-							f[val_idx] === "Cancelled"
-						);
-					}
-					return false;
+				console.log("filters", filters);
+				const new_filters = filters.filter((f) => {
+					console.log("f", f);
+					return !f.includes("status");
 				});
-
-				if (!has_cancelled_filter) {
-					// Add filter in the format that matches existing filters
-					// Check the format of existing filters
-					const filter_format =
-						filters.length > 0 && filters[0].length === 4
-							? ["Task", "status", "!=", "Cancelled"]
-							: ["status", "!=", "Cancelled"];
-					filters.push(filter_format);
-					listview.filter_area.set(filters);
-					listview.refresh();
-				}
+				new_filters.push(["Task", "status", "not in", ["Cancelled,"], false]);
+				console.log("new_filters", new_filters);
+				listview.filter_area
+					.clear(false)
+					.then(function () {
+						return listview.filter_area.set(new_filters);
+					})
+					.then(function () {
+						listview.refresh();
+					});
 			});
 
 			// Add quick filter menu items
@@ -106,12 +96,13 @@ frappe.listview_settings["Task"] = {
 				// Clear existing filters first, then set the new status filter
 				// Use "in" operator to include both "Open" and "Overdue" statuses
 				// Format: [doctype, field, operator, value]
+				let existing_filters = listview.filter_area.get();
+				let new_filters = existing_filters.filter((f) => !f.includes("status"));
+				new_filters.push(["Task", "status", "in", ["Open", "Overdue"]]);
 				listview.filter_area
 					.clear(false)
 					.then(function () {
-						return listview.filter_area.set([
-							["Task", "status", "in", ["Open", "Overdue"]],
-						]);
+						return listview.filter_area.set(new_filters);
 					})
 					.then(function () {
 						listview.refresh();
@@ -122,10 +113,13 @@ frappe.listview_settings["Task"] = {
 			listview.page.add_menu_item(__("All Working Tasks"), function () {
 				// Clear existing filters first, then set the new status filter
 				// Use 4-element format: [doctype, field, operator, value]
+				let existing_filters = listview.filter_area.get();
+				let new_filters = existing_filters.filter((f) => !f.includes("status"));
+				new_filters.push(["Task", "status", "=", "Working"]);
 				listview.filter_area
 					.clear(false)
 					.then(function () {
-						return listview.filter_area.set([["Task", "status", "=", "Working"]]);
+						return listview.filter_area.set(new_filters);
 					})
 					.then(function () {
 						listview.refresh();
@@ -136,10 +130,29 @@ frappe.listview_settings["Task"] = {
 			listview.page.add_menu_item(__("All Completed Tasks"), function () {
 				// Clear existing filters first, then set the new status filter
 				// Use 4-element format: [doctype, field, operator, value]
+				let existing_filters = listview.filter_area.get();
+				let new_filters = existing_filters.filter((f) => !f.includes("status"));
+				new_filters.push(["Task", "status", "=", "Completed"]);
 				listview.filter_area
 					.clear(false)
 					.then(function () {
-						return listview.filter_area.set([["Task", "status", "=", "Completed"]]);
+						return listview.filter_area.set(new_filters);
+					})
+					.then(function () {
+						listview.refresh();
+					});
+			});
+
+			listview.page.add_menu_item(__("All Overdue Tasks"), function () {
+				// Clear existing filters first, then set the new status filter
+				// Use 4-element format: [doctype, field, operator, value]
+				let existing_filters = listview.filter_area.get();
+				let new_filters = existing_filters.filter((f) => !f.includes("status"));
+				new_filters.push(["Task", "status", "=", "Overdue"]);
+				listview.filter_area
+					.clear(false)
+					.then(function () {
+						return listview.filter_area.set(new_filters);
 					})
 					.then(function () {
 						listview.refresh();
