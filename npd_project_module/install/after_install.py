@@ -152,13 +152,14 @@ def create_npd_template():
 	]
 
 	# Check if template already exists and has correct number of tasks
+	needs_update = False
 	if frappe.db.exists("Project Template", template_name):
 		template = frappe.get_doc("Project Template", template_name)
 		if template.tasks and len(template.tasks) == len(task_names):
 			print(f"  ✓ NPD Template already exists with {len(task_names)} tasks")
 			return
-		# Template exists but needs updating, clear existing tasks
-		template.tasks = []
+		# Template exists but needs updating
+		needs_update = True
 
 	# Create template Task documents (these are just templates, not real tasks)
 	# We need to create them in sequence and add dependencies
@@ -231,6 +232,9 @@ def create_npd_template():
 	# Create or update Project Template
 	if frappe.db.exists("Project Template", template_name):
 		template = frappe.get_doc("Project Template", template_name)
+		# Clear existing tasks if we're updating (to avoid duplication)
+		if needs_update:
+			template.tasks = []
 	else:
 		# Create new Project Template with name "NPD Template"
 		template = frappe.get_doc(
