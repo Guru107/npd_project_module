@@ -169,6 +169,7 @@ def generate_tasks_for_part(project_name, part_number, iteration_number=0):
 					"project": project_name,
 					"part_number": part_number,
 					"iteration_number": iteration_number,
+					"stage_type": task_name,  # Store the stage name from template
 					"status": "Open",
 					"is_group": 0,
 				}

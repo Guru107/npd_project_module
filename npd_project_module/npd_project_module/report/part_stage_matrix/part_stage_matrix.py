@@ -147,6 +147,7 @@ class PartStageMatrix:
 				"part_number",
 				"iteration_number",
 				"status",
+				"stage_type",
 			],
 			order_by="part_number, iteration_number, creation",
 		)
@@ -231,17 +232,9 @@ class PartStageMatrix:
 
 	def is_stage_task(self, task, stage_name):
 		"""Check if a task belongs to a specific stage."""
-		subject = task.get("subject", "")
-		# Task subject format: "[Item Name] [Stage Name]"
-		# Since stage names can have multiple words (e.g., "RFQ Data", "Internal Team Technical Feasibility"),
-		# we check if the subject ends with the stage name
-		if not subject or not stage_name:
-			return False
-		# Check if subject ends with " [Stage Name]" (space + stage name) to avoid false matches
-		# For example, "Part-001 RFQ Data" should match "RFQ Data"
-		# But "Part-001 Comparison of TKO & RFQ Data" should NOT match "RFQ Data"
-		# Format: "[Item Name] [Stage Name]"
-		return subject == stage_name or subject.endswith(" " + stage_name)
+		# Use stage_type field to match tasks to stages
+		task_stage_type = task.get("stage_type")
+		return task_stage_type == stage_name
 
 	def check_if_blocked(self, part_tasks, stage_index, iteration_number):
 		"""Check if a stage is blocked due to unmet dependencies."""
@@ -329,11 +322,13 @@ def get_task_details(project, part_number, stage_name):
 		list: List of task dictionaries with details
 	"""
 	# Get all tasks for this project, part, and stage
+	# Filter directly using stage_type field
 	tasks = frappe.get_all(
 		"Task",
 		filters={
 			"project": project,
 			"part_number": part_number,
+			"stage_type": stage_name,
 		},
 		fields=[
 			"name",
@@ -344,20 +339,9 @@ def get_task_details(project, part_number, stage_name):
 			"progress",
 			"exp_start_date",
 			"exp_end_date",
+			"stage_type",
 		],
 		order_by="iteration_number, creation",
 	)
 
-	# Filter tasks that match the stage
-	stage_tasks = []
-	for task in tasks:
-		subject = task.get("subject", "")
-		# Task subject format: "[Item Name] [Stage Name]"
-		# Check if subject ends with " [Stage Name]" (space + stage name) to handle multi-word stage names correctly
-		# This avoids false matches (e.g., "Comparison of TKO & RFQ Data" matching "RFQ Data")
-		if not subject or not stage_name:
-			continue
-		if subject == stage_name or subject.endswith(" " + stage_name):
-			stage_tasks.append(task)
-
-	return stage_tasks
+	return tasks

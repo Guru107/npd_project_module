@@ -48,6 +48,17 @@ def create_task_custom_fields():
 				"non_negative": 1,
 				"description": "Iteration number for this task (system-managed)",
 			},
+			{
+				"fieldname": "stage_type",
+				"label": "Stage Type",
+				"fieldtype": "Data",
+				"insert_after": "iteration_number",
+				"in_list_view": 1,
+				"in_standard_filter": 1,
+				"read_only": 1,
+				"translatable": 0,
+				"description": "Stage name from NPD Template (e.g., 'RFQ Data', 'Comparison of TKO & RFQ Data'). Used to classify tasks by stage type.",
+			},
 		]
 	}
 
@@ -164,15 +175,36 @@ def create_npd_template():
 			existing_task_name = existing_tasks[0].name
 			template_tasks.append(existing_task_name)
 
-			# Update dependencies if needed
+			# Ensure existing template task has is_template set and reset dependencies to sequential order
+			existing_task_doc = frappe.get_doc("Task", existing_task_name)
+			needs_save = False
+
+			# Set is_template and status if not already set
+			if not existing_task_doc.is_template:
+				existing_task_doc.is_template = 1
+				needs_save = True
+			# Ensure status is "Template" for template tasks
+			if existing_task_doc.is_template and existing_task_doc.status != "Template":
+				existing_task_doc.status = "Template"
+				needs_save = True
+
+			# Reset dependencies to only have the sequential dependency
+			# This ensures all dependencies are in the template_tasks list
 			if previous_task_name:
-				existing_task_doc = frappe.get_doc("Task", existing_task_name)
-				# Check if dependency already exists
-				has_dependency = any(dep.task == previous_task_name for dep in existing_task_doc.depends_on)
-				if not has_dependency:
-					existing_task_doc.append("depends_on", {"task": previous_task_name})
-					existing_task_doc.save(ignore_permissions=True)
-					frappe.db.commit()
+				# Clear existing dependencies and set only the sequential one
+				existing_task_doc.depends_on = []
+				existing_task_doc.append("depends_on", {"task": previous_task_name})
+				needs_save = True
+			else:
+				# First task should have no dependencies
+				if existing_task_doc.depends_on:
+					existing_task_doc.depends_on = []
+					needs_save = True
+
+			# Save once if any changes were made
+			if needs_save:
+				existing_task_doc.save(ignore_permissions=True)
+				frappe.db.commit()
 
 			previous_task_name = existing_task_name
 		else:
@@ -181,8 +213,9 @@ def create_npd_template():
 				{
 					"doctype": "Task",
 					"subject": task_name,
-					"status": "Open",
+					"status": "Template",
 					"is_group": 0,
+					"is_template": 1,
 				}
 			)
 

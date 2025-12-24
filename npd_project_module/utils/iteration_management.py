@@ -384,6 +384,7 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 					"project": project_name,
 					"part_number": part_number,
 					"iteration_number": iteration_number,
+					"stage_type": task_name,  # Store the stage name from template
 					"status": "Open",
 					"is_group": 0,
 				}
