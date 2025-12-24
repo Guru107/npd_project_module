@@ -30,12 +30,6 @@ frappe.query_reports["Part Stage Matrix"] = {
 		},
 	],
 
-	onload: function (report) {
-		// Set up event listener for project change
-		// Note: This might not be needed as MultiSelectList should handle it automatically
-		console.log("report onload");
-		console.log("report", report);
-	},
 
 	formatter: function (value, row, column, data, default_formatter) {
 		// Apply color coding based on status
@@ -85,14 +79,5 @@ frappe.query_reports["Part Stage Matrix"] = {
 		}
 
 		return `<span style="color: ${color}; background-color: ${bg_color}; padding: 4px 8px; border-radius: 4px; font-weight: 500;">${status}</span>`;
-	},
-	after_datatable_render: function (datatable) {
-		// Add click handler for drill-down functionality
-
-		// In Frappe v16, use the report container element for event delegation
-		// The datatable is rendered inside frappe.query_report.$report
-		console.log("after_datatable_render");
-
-		console.log(datatable.options.onClick);
 	},
 };
