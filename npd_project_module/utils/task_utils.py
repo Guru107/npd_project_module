@@ -32,7 +32,7 @@ def validate_task_cancellation(task_name, part_number, subject):
 	try:
 		# Get task document to access stage_type field
 		task_doc = frappe.get_doc("Task", task_name)
-		
+
 		# Get project name from task
 		project_name = task_doc.project
 		task_sequence = get_task_sequence_from_template(project_name=project_name)
@@ -40,7 +40,7 @@ def validate_task_cancellation(task_name, part_number, subject):
 		# Check if this is RFQ Data (first task, index 0) using stage_type
 		if not task_sequence:
 			return {"valid": True}
-		
+
 		rfq_stage_type = task_sequence[0]["subject"]  # RFQ Data stage_type is always first
 
 		# Use stage_type for exact matching instead of subject

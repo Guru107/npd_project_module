@@ -32,6 +32,7 @@ NPD_TASK_SEQUENCE_SUBJECTS = [
 	"Handover to Production",
 ]
 
+
 def _get_fallback_task_sequence():
 	"""Get fallback task sequence as list of dicts with subject and color."""
 	return [{"subject": subject, "color": "#808080"} for subject in NPD_TASK_SEQUENCE_SUBJECTS]
@@ -99,10 +100,12 @@ def get_task_sequence_from_template(project_name=None, template_name=None):
 		# Get the Task document to get its subject and color
 		task_doc = frappe.get_doc("Task", task_row.task)
 		if task_doc.subject:
-			task_sequence.append({
-				"subject": task_doc.subject,
-				"color": task_doc.color or "#808080"  # Default gray if no color
-			})
+			task_sequence.append(
+				{
+					"subject": task_doc.subject,
+					"color": task_doc.color or "#808080",  # Default gray if no color
+				}
+			)
 
 	if not task_sequence:
 		frappe.log_error(
