@@ -42,8 +42,11 @@ class TestTaskGeneration(NPDProjectModuleTestSuite):
 		sequence = get_task_sequence_from_template()
 		self.assertIsInstance(sequence, list)
 		self.assertEqual(len(sequence), 18)
-		self.assertEqual(sequence[0], "RFQ Data")
-		self.assertEqual(sequence[1], "Internal Team Technical Feasibility")
+		self.assertIsInstance(sequence[0], dict)
+		self.assertIn("subject", sequence[0])
+		self.assertIn("color", sequence[0])
+		self.assertEqual(sequence[0]["subject"], "RFQ Data")
+		self.assertEqual(sequence[1]["subject"], "Internal Team Technical Feasibility")
 
 	def test_get_task_sequence_from_template_with_project(self):
 		"""Test getting task sequence from template using project."""

@@ -49,7 +49,7 @@ def validate_project_parts(project_name, part_numbers):
 
 
 @frappe.whitelist()
-def handle_project_save(project_name, part_numbers_data, is_new=False):
+def handle_project_save(project_name, part_numbers_data):
 	"""
 	Handle task generation and project assignment after project save.
 	This is called from client script after save.
@@ -57,7 +57,6 @@ def handle_project_save(project_name, part_numbers_data, is_new=False):
 	Args:
 		project_name: Name of the Project document
 		part_numbers_data: List of dicts with part_number and iteration_number (may be JSON string)
-		is_new: Boolean indicating if this is a new document
 
 	Returns:
 		dict: {"success": bool, "message": str}
@@ -73,13 +72,8 @@ def handle_project_save(project_name, part_numbers_data, is_new=False):
 				)
 				frappe.throw(_("Invalid part_numbers_data format"))
 
-		# Convert is_new to boolean if it's a string
-		if isinstance(is_new, str):
-			is_new = is_new.lower() in ("true", "1", "yes")
-
 		if not part_numbers_data:
-			if not is_new:
-				_handle_part_removal(project_name, [])
+			_handle_part_removal(project_name, [])
 			return {"success": True}
 
 		# Ensure part_numbers_data is a list
@@ -105,71 +99,49 @@ def handle_project_save(project_name, part_numbers_data, is_new=False):
 					f"Invalid row format in part_numbers_data: {type(row)} - {row}", "Project Save Error"
 				)
 
-		if is_new:
-			# For new documents, generate tasks for all parts
-			for part_row in part_numbers_data:
-				# Ensure part_row is a dict
-				if not isinstance(part_row, dict):
-					frappe.log_error(f"Invalid part_row format: {part_row}", "Project Save Error")
-					continue
+		# Ensure all items have project field set
+		for part_row in part_numbers_data:
+			# Ensure part_row is a dict
+			if not isinstance(part_row, dict):
+				frappe.log_error(f"Invalid part_row format: {part_row}", "Project Save Error")
+				continue
 
-				part_number = part_row.get("part_number")
-				if not part_number:
-					continue
+			part_number = part_row.get("part_number")
+			if part_number:
+				current_item_project = frappe.db.get_value("Item", part_number, "project")
+				if current_item_project != project_name:
+					frappe.db.set_value("Item", part_number, "project", project_name)
 
+		# Get existing part numbers with tasks
+		parts_with_tasks = _get_existing_part_numbers(project_name)
+
+		# Find new parts (parts that don't have tasks yet)
+		new_parts = []
+		for part_row in part_numbers_data:
+			# Ensure part_row is a dict
+			if not isinstance(part_row, dict):
+				frappe.log_error(f"Invalid part_row format: {part_row}", "Project Save Error")
+				continue
+
+			part_number = part_row.get("part_number")
+			if part_number and part_number not in parts_with_tasks:
 				iteration_number = part_row.get("iteration_number") or 0
+				new_parts.append({"part_number": part_number, "iteration_number": iteration_number})
 
-				# Set project field on Item
-				frappe.db.set_value("Item", part_number, "project", project_name)
+		# Generate tasks for new parts
+		for part_info in new_parts:
+			generate_tasks_for_part(
+				project_name=project_name,
+				part_number=part_info["part_number"],
+				iteration_number=part_info["iteration_number"],
+			)
 
-				# Generate tasks
-				generate_tasks_for_part(
-					project_name=project_name, part_number=part_number, iteration_number=iteration_number
-				)
-		else:
-			# For updates, ensure all items have project field set
-			for part_row in part_numbers_data:
-				# Ensure part_row is a dict
-				if not isinstance(part_row, dict):
-					frappe.log_error(f"Invalid part_row format: {part_row}", "Project Save Error")
-					continue
-
-				part_number = part_row.get("part_number")
-				if part_number:
-					current_item_project = frappe.db.get_value("Item", part_number, "project")
-					if current_item_project != project_name:
-						frappe.db.set_value("Item", part_number, "project", project_name)
-
-			# Get existing part numbers with tasks
-			parts_with_tasks = _get_existing_part_numbers(project_name)
-
-			# Find new parts
-			new_parts = []
-			for part_row in part_numbers_data:
-				# Ensure part_row is a dict
-				if not isinstance(part_row, dict):
-					frappe.log_error(f"Invalid part_row format: {part_row}", "Project Save Error")
-					continue
-
-				part_number = part_row.get("part_number")
-				if part_number and part_number not in parts_with_tasks:
-					iteration_number = part_row.get("iteration_number") or 0
-					new_parts.append({"part_number": part_number, "iteration_number": iteration_number})
-
-			# Generate tasks for new parts
-			for part_info in new_parts:
-				generate_tasks_for_part(
-					project_name=project_name,
-					part_number=part_info["part_number"],
-					iteration_number=part_info["iteration_number"],
-				)
-
-			# Handle part removal
-			_handle_part_removal(project_name, current_part_numbers)
+		# Handle part removal
+		_handle_part_removal(project_name, current_part_numbers)
 
 		return {"success": True, "message": _("Project saved successfully")}
 	except Exception as e:
-		frappe.log_error(f"Error handling project save: {e!s}", "Project Save Error")
+		frappe.log_error(f"Error handling project save: {e!s}", "Project Save Error", e)
 		return {"success": False, "message": str(e)}
 
 
@@ -231,8 +203,7 @@ def _handle_part_removal(project_name, current_part_numbers):
 	all_part_numbers_in_db = {item.name for item in items_with_project}
 
 	# Find parts that were removed (exist in DB but not in current table)
-	removed_parts = all_part_numbers_in_db - current_part_numbers
-
+	removed_parts = all_part_numbers_in_db - set(current_part_numbers)
 	for part_number in removed_parts:
 		# Delete tasks for this part
 		delete_tasks_for_part(project_name=project_name, part_number=part_number)

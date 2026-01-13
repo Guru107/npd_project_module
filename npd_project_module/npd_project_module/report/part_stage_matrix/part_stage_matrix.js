@@ -30,7 +30,6 @@ frappe.query_reports["Part Stage Matrix"] = {
 		},
 	],
 
-
 	formatter: function (value, row, column, data, default_formatter) {
 		// Apply color coding based on status
 		if (column.fieldname === "stage") {
