@@ -59,7 +59,12 @@ def get_cancelled_task_for_part(project_name, part_number):
 	for task in tasks:
 		if task.status == "Cancelled":
 			# Find which task in the sequence this is
-			for index, task_name in enumerate(task_sequence):
+			for index, task_item in enumerate(task_sequence):
+				# Handle both string and dict formats
+				if isinstance(task_item, dict):
+					task_name = task_item["subject"]
+				else:
+					task_name = task_item
 				expected_subject = f"{item_name} {task_name}"
 				if task.subject == expected_subject:
 					return {
@@ -213,7 +218,15 @@ def get_iteration_info(project_name, part_number):
 	task_sequence = get_task_sequence_from_template(project_name=project_name)
 	if not task_sequence or len(task_sequence) < 2:
 		frappe.throw(_("Project Template must have at least 2 tasks"))
-	start_task_name = task_sequence[1]  # Index 1 = "Internal Team Technical Feasibility"
+
+	# Handle both string and dict formats (backward compatibility)
+	start_task_item = task_sequence[1]  # Index 1 = "Internal Team Technical Feasibility"
+	if isinstance(start_task_item, dict):
+		start_task_name = start_task_item["subject"]
+	else:
+		# String format (current implementation)
+		start_task_name = start_task_item
+
 	start_task_subject = f"{item_name} {start_task_name}"
 
 	new_iteration_start_task = {
@@ -235,8 +248,13 @@ def get_iteration_info(project_name, part_number):
 def create_new_iteration(project_name, part_number):
 	"""
 	Create a new iteration for a part, always starting from the 2nd stage
-	("Internal Team Technical Feasibility"). RFQ Data (1st stage) is never cancelled
-	and will always be completed.
+	("Internal Team Technical Feasibility").
+
+	When a new iteration is created:
+	- All tasks from the previous iteration are cancelled (except completed tasks and RFQ Data)
+	- Completed tasks are preserved to maintain history
+	- RFQ Data (1st stage) is always preserved and never cancelled
+	- New tasks are generated starting from the 2nd stage
 
 	Args:
 		project_name (str): Name of the Project document
@@ -247,7 +265,8 @@ def create_new_iteration(project_name, part_number):
 			"success": bool,
 			"new_iteration_number": int,
 			"tasks_created": list,
-			"tasks_obsoleted": int,
+			"tasks_cancelled": int,
+			"tasks_preserved": int,
 			"message": str
 		}
 	"""
@@ -268,21 +287,13 @@ def create_new_iteration(project_name, part_number):
 			)
 		)
 
-	# Check if there's at least one cancelled task in latest iteration
-	# (RFQ Data will never be cancelled, so we check for any cancelled task)
-	cancelled_task = get_cancelled_task_for_part(project_name, part_number)
-	if not cancelled_task:
-		frappe.throw(
-			_(
-				"No cancelled task found in the latest iteration. Cannot create new iteration without a cancelled task."
-			)
-		)
-
 	# Calculate new iteration number
 	new_iteration_number = latest_iteration + 1
 
-	# Mark incomplete tasks from previous iteration as obsolete
-	tasks_obsoleted = mark_tasks_as_obsolete(project_name, part_number, latest_iteration)
+	# Cancel all tasks from previous iteration (preserving completed tasks and RFQ Data)
+	cancellation_result = cancel_all_tasks_except_rfq(project_name, part_number, latest_iteration)
+	tasks_cancelled = cancellation_result["cancelled"]
+	tasks_preserved = cancellation_result["preserved"]
 
 	# Always start from the 2nd stage (index 1): "Internal Team Technical Feasibility"
 	# RFQ Data (index 0) is never cancelled and will always be completed
@@ -292,7 +303,14 @@ def create_new_iteration(project_name, part_number):
 	task_sequence = get_task_sequence_from_template(project_name=project_name)
 	if not task_sequence or len(task_sequence) < 2:
 		frappe.throw(_("Project Template must have at least 2 tasks"))
-	start_task_name = task_sequence[start_index]
+
+	# Handle both string and dict formats (backward compatibility)
+	start_task_item = task_sequence[start_index]
+	if isinstance(start_task_item, dict):
+		start_task_name = start_task_item["subject"]
+	else:
+		# String format (current implementation)
+		start_task_name = start_task_item
 
 	# Generate tasks starting from the 2nd stage
 	tasks_created = generate_tasks_from_cancelled_task(
@@ -311,10 +329,12 @@ def create_new_iteration(project_name, part_number):
 		new_iteration_number, item_name, len(tasks_created), start_task_subject
 	)
 
-	if tasks_obsoleted > 0:
-		message += _(" Marked {0} incomplete task(s) from previous iteration as obsolete.").format(
-			tasks_obsoleted
-		)
+	# Add summary of task preservation and cancellation
+	if tasks_preserved > 0:
+		message += _(" Preserved {0} completed task(s) from previous iteration.").format(tasks_preserved)
+
+	if tasks_cancelled > 0:
+		message += _(" Cancelled {0} task(s) from previous iteration.").format(tasks_cancelled)
 
 	frappe.msgprint(message, indicator="green")
 
@@ -322,7 +342,8 @@ def create_new_iteration(project_name, part_number):
 		"success": True,
 		"new_iteration_number": new_iteration_number,
 		"tasks_created": tasks_created,
-		"tasks_obsoleted": tasks_obsoleted,
+		"tasks_cancelled": tasks_cancelled,
+		"tasks_preserved": tasks_preserved,
 		"message": message,
 	}
 
@@ -373,7 +394,12 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 		previous_task_name = None
 
 		for index in range(start_index, len(task_sequence)):
-			task_name = task_sequence[index]
+			# Handle both string and dict formats
+			task_item = task_sequence[index]
+			if isinstance(task_item, dict):
+				task_name = task_item["subject"]
+			else:
+				task_name = task_item
 			full_task_name = f"{item_name} {task_name}"
 
 			# Create task document
@@ -403,6 +429,81 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 	finally:
 		# Clear flag after task generation
 		frappe.flags.in_task_generation = False
+
+
+@frappe.whitelist()
+def cancel_all_tasks_except_rfq(project_name, part_number, iteration_number):
+	"""
+	Cancel all tasks from a specific iteration (except completed tasks and RFQ Data).
+
+	When a new iteration is created, all tasks from the previous iteration must be cancelled,
+	except:
+	- Tasks with "Completed" status (preserved to maintain history)
+	- RFQ Data task (always preserved, never cancelled)
+
+	Args:
+		project_name (str): Name of the Project document
+		part_number (str): Item code/name (part number)
+		iteration_number (int): Iteration number to cancel tasks from
+
+	Returns:
+		dict: {
+			"cancelled": int,  # Number of tasks cancelled
+			"preserved": int   # Number of tasks preserved (completed + RFQ Data)
+		}
+	"""
+	if not project_name or not part_number or iteration_number is None:
+		return {"cancelled": 0, "preserved": 0}
+
+	# Get task sequence to identify RFQ Data (first task, index 0)
+	task_sequence = get_task_sequence_from_template(project_name=project_name)
+	if not task_sequence:
+		return {"cancelled": 0, "preserved": 0}
+
+	# Handle both string and dict formats (backward compatibility)
+	rfq_task_item = task_sequence[0]
+	if isinstance(rfq_task_item, dict):
+		rfq_stage_type = rfq_task_item["subject"]
+	else:
+		# String format (current implementation)
+		rfq_stage_type = rfq_task_item
+
+	# Get all tasks for this part and iteration (including completed ones)
+	all_tasks = frappe.get_all(
+		"Task",
+		filters={
+			"project": project_name,
+			"part_number": part_number,
+			"iteration_number": iteration_number,
+		},
+		fields=["name", "status", "stage_type"],
+	)
+
+	cancelled_count = 0
+	preserved_count = 0
+
+	for task in all_tasks:
+		# Always preserve RFQ Data task - it should never be cancelled
+		if task.stage_type == rfq_stage_type:
+			preserved_count += 1
+			continue
+
+		# Preserve completed tasks
+		if task.status == "Completed":
+			preserved_count += 1
+			continue
+
+		# Cancel all other tasks regardless of their current status
+		try:
+			task_doc = frappe.get_doc("Task", task.name)
+			if task_doc.status != "Cancelled":
+				task_doc.status = "Cancelled"
+				task_doc.save(ignore_permissions=True)
+				cancelled_count += 1
+		except Exception as e:
+			frappe.log_error(f"Error cancelling task {task.name}: {e!s}")
+
+	return {"cancelled": cancelled_count, "preserved": preserved_count}
 
 
 @frappe.whitelist()
