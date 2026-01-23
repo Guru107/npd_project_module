@@ -121,7 +121,8 @@ class PartStageMatrix:
 		tasks = self.get_tasks(part_codes)
 
 		# Build matrix: for each stage, get status for each part
-		for stage_index, stage_name in enumerate(self.task_sequence):
+		for stage_index, stage_info in enumerate(self.task_sequence):
+			stage_name = stage_info["subject"]
 			row = {"stage": stage_name}
 
 			for part in parts:
@@ -205,7 +206,8 @@ class PartStageMatrix:
 			else:
 				# Check if previous stage exists in any iteration
 				if stage_index > 0 and self.task_sequence:
-					prev_stage_name = self.task_sequence[stage_index - 1]
+					prev_stage_info = self.task_sequence[stage_index - 1]
+					prev_stage_name = prev_stage_info["subject"]
 					prev_stage_exists = any(self.is_stage_task(t, prev_stage_name) for t in part_tasks)
 					if not prev_stage_exists:
 						return "Not Started"
@@ -244,7 +246,8 @@ class PartStageMatrix:
 		# Check if previous stage is completed in this iteration
 		if not self.task_sequence or stage_index < 1:
 			return "Not Started"
-		prev_stage_name = self.task_sequence[stage_index - 1]
+		prev_stage_info = self.task_sequence[stage_index - 1]
+		prev_stage_name = prev_stage_info["subject"]
 		prev_stage_task = None
 
 		for t in part_tasks:

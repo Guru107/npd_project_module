@@ -10,7 +10,8 @@ from frappe import _
 
 # Fallback list of 18 tasks in sequential order for New Part Development Process
 # This is used if Project Template is not available (backward compatibility)
-NPD_TASK_SEQUENCE = [
+# Returns list of dicts with subject and color (default gray for fallback)
+NPD_TASK_SEQUENCE_SUBJECTS = [
 	"RFQ Data",
 	"Internal Team Technical Feasibility",
 	"Supplier Quote & Tooling Sequence",
@@ -32,9 +33,14 @@ NPD_TASK_SEQUENCE = [
 ]
 
 
+def _get_fallback_task_sequence():
+	"""Get fallback task sequence as list of dicts with subject and color."""
+	return [{"subject": subject, "color": "#808080"} for subject in NPD_TASK_SEQUENCE_SUBJECTS]
+
+
 def get_task_sequence_from_template(project_name=None, template_name=None):
 	"""
-	Get task sequence from Project Template.
+	Get task sequence from Project Template with subject and color.
 
 	Args:
 		project_name (str, optional): Name of the Project document. If provided,
@@ -43,7 +49,8 @@ def get_task_sequence_from_template(project_name=None, template_name=None):
 			will use this template directly. Defaults to "NPD Template".
 
 	Returns:
-		list: List of task names (subjects) in sequence
+		list: List of dicts with 'subject' and 'color' keys in sequence
+		Example: [{"subject": "RFQ Data", "color": "#FF6B6B"}, ...]
 
 	Raises:
 		frappe.ValidationError: If template not found or has no tasks
@@ -63,7 +70,7 @@ def get_task_sequence_from_template(project_name=None, template_name=None):
 			f"Project Template '{template_name}' not found. Using fallback sequence.",
 			"Task Generation Warning",
 		)
-		return NPD_TASK_SEQUENCE
+		return _get_fallback_task_sequence()
 
 	# Get template document
 	template = frappe.get_doc("Project Template", template_name)
@@ -74,7 +81,7 @@ def get_task_sequence_from_template(project_name=None, template_name=None):
 			f"Project Template '{template_name}' is disabled. Using fallback sequence.",
 			"Task Generation Warning",
 		)
-		return NPD_TASK_SEQUENCE
+		return _get_fallback_task_sequence()
 
 	# Check if template has tasks
 	if not template.tasks:
@@ -82,22 +89,30 @@ def get_task_sequence_from_template(project_name=None, template_name=None):
 			f"Project Template '{template_name}' has no tasks. Using fallback sequence.",
 			"Task Generation Warning",
 		)
-		return NPD_TASK_SEQUENCE
+		return _get_fallback_task_sequence()
 
-	# Extract task subjects in order
+	# Extract task subjects and colors in order
 	task_sequence = []
 	for task_row in template.tasks:
-		# Get the Task document to get its subject
-		task_subject = frappe.db.get_value("Task", task_row.task, "subject")
-		if task_subject:
-			task_sequence.append(task_subject)
+		if not task_row.task:
+			continue
+
+		# Get the Task document to get its subject and color
+		task_doc = frappe.get_doc("Task", task_row.task)
+		if task_doc.subject:
+			task_sequence.append(
+				{
+					"subject": task_doc.subject,
+					"color": task_doc.color or "#808080",  # Default gray if no color
+				}
+			)
 
 	if not task_sequence:
 		frappe.log_error(
 			f"Project Template '{template_name}' has no valid tasks. Using fallback sequence.",
 			"Task Generation Warning",
 		)
-		return NPD_TASK_SEQUENCE
+		return _get_fallback_task_sequence()
 
 	return task_sequence
 
@@ -146,7 +161,7 @@ def generate_tasks_for_part(project_name, part_number, iteration_number=0):
 	# Get Item name for task naming
 	item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
 
-	# Get task sequence from Project Template
+	# Get task sequence from Project Template (returns list of dicts with subject and color)
 	task_sequence = get_task_sequence_from_template(project_name=project_name)
 
 	# Set flag to indicate we're in task generation (to skip hooks)
@@ -157,9 +172,12 @@ def generate_tasks_for_part(project_name, part_number, iteration_number=0):
 		created_tasks = []
 		previous_task_name = None
 
-		for _index, task_name in enumerate(task_sequence):
+		for _index, task_info in enumerate(task_sequence):
+			task_subject = task_info["subject"]
+			task_color = task_info.get("color")
+
 			# Format task name: "[Item Name] [Task Name]"
-			full_task_name = f"{item_name} {task_name}"
+			full_task_name = f"{item_name} {task_subject}"
 
 			# Create task document
 			task_doc = frappe.get_doc(
@@ -169,11 +187,15 @@ def generate_tasks_for_part(project_name, part_number, iteration_number=0):
 					"project": project_name,
 					"part_number": part_number,
 					"iteration_number": iteration_number,
-					"stage_type": task_name,  # Store the stage name from template
+					"stage_type": task_subject,  # Store the stage name from template
 					"status": "Open",
 					"is_group": 0,
 				}
 			)
+
+			# Assign color from template task if available
+			if task_color:
+				task_doc.color = task_color
 
 			# Add dependency on previous task if it exists
 			if previous_task_name:
