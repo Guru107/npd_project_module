@@ -448,7 +448,7 @@ def cancel_all_tasks_except_rfq(project_name, part_number, iteration_number):
 	cancelled_count = 0
 	for task in all_tasks:
 		# Skip RFQ Data task - it should never be cancelled (use stage_type for exact match)
-		if task.stage_type == rfq_stage_type:
+		if task.stage_type and task.stage_type == rfq_stage_type:
 			continue
 
 		# Cancel all other tasks regardless of their current status

@@ -44,7 +44,7 @@ def validate_task_cancellation(task_name, part_number, subject):
 		rfq_stage_type = task_sequence[0]["subject"]  # RFQ Data stage_type is always first
 
 		# Use stage_type for exact matching instead of subject
-		if task_doc.stage_type == rfq_stage_type:
+		if task_doc.stage_type and task_doc.stage_type == rfq_stage_type:
 			return {
 				"valid": False,
 				"message": _(
