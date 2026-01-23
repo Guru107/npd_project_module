@@ -75,8 +75,8 @@ def get_task_sequence_from_template(project_name=None, template_name=None):
 	# Get template document
 	template = frappe.get_doc("Project Template", template_name)
 
-	# Check if template is disabled
-	if template.disabled:
+	# Check if template is disabled (field available in v16+, use getattr for v15 compatibility)
+	if getattr(template, "disabled", False):
 		frappe.log_error(
 			f"Project Template '{template_name}' is disabled. Using fallback sequence.",
 			"Task Generation Warning",
