@@ -3,7 +3,6 @@
 
 frappe.ui.form.on("Project", {
 	validate: function (frm) {
-		// Validate that items don't already belong to another project
 		if (!frm.doc.part_numbers || frm.doc.part_numbers.length === 0) {
 			return;
 		}
@@ -31,50 +30,41 @@ frappe.ui.form.on("Project", {
 
 	after_save: function (frm) {
 		// Handle task generation and project assignment
-		if (!frm.doc.part_numbers || frm.doc.part_numbers.length === 0) {
-			return;
-		}
 
 		// Map part_numbers child table to array of objects
 		// Handle both object rows and potential edge cases
-		const part_numbers_data = frm.doc.part_numbers
-			.map((row) => {
-				// Ensure row is an object
-				if (typeof row !== "object" || row === null) {
-					return null;
-				}
-				// Extract part_number - handle both direct property and potential string values
-				const part_number =
-					typeof row.part_number === "string"
-						? row.part_number
-						: row.part_number || null;
-				if (!part_number) {
-					return null;
-				}
-				return {
-					part_number: part_number,
-					iteration_number:
-						typeof row.iteration_number === "number"
-							? row.iteration_number
-							: parseInt(row.iteration_number) || 0,
-				};
-			})
-			.filter((row) => row !== null && row.part_number);
-
-		if (part_numbers_data.length === 0) {
-			return;
-		}
-
-		// Check if this is a new document
-		// After save, __islocal should be false, but we can also check if name was just assigned
-		const is_new = frm.doc.__islocal || !frm.doc.name || frm.is_new();
+		const part_numbers_data =
+			frm.doc.part_numbers && frm.doc.part_numbers.length > 0
+				? frm.doc.part_numbers
+						.map((row) => {
+							// Ensure row is an object
+							if (typeof row !== "object" || row === null) {
+								return null;
+							}
+							// Extract part_number - handle both direct property and potential string values
+							const part_number =
+								typeof row.part_number === "string"
+									? row.part_number
+									: row.part_number || null;
+							if (!part_number) {
+								return null;
+							}
+							return {
+								part_number: part_number,
+								iteration_number:
+									typeof row.iteration_number === "number"
+										? row.iteration_number
+										: parseInt(row.iteration_number) || 0,
+							};
+						})
+						.filter((row) => row !== null && row.part_number)
+				: [];
 
 		frappe.call({
 			method: "npd_project_module.utils.project_utils.handle_project_save",
 			args: {
 				project_name: frm.doc.name,
 				part_numbers_data: part_numbers_data,
-				is_new: is_new,
 			},
 			callback: function (r) {
 				if (r.message && r.message.success) {

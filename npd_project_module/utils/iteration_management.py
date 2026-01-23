@@ -8,7 +8,9 @@ Utility functions for iteration management in NPD Project Module.
 import frappe
 from frappe import _
 
-from npd_project_module.utils.task_generation import generate_tasks_for_part, get_task_sequence_from_template
+from npd_project_module.utils.task_generation import (
+	get_task_sequence_from_template,
+)
 
 
 @frappe.whitelist()
@@ -41,38 +43,32 @@ def get_cancelled_task_for_part(project_name, part_number):
 	tasks = frappe.get_all(
 		"Task",
 		filters={"project": project_name, "part_number": part_number, "iteration_number": latest_iteration},
-		fields=["name", "subject", "status"],
+		fields=["name", "subject", "status", "stage_type"],
 		order_by="creation",
 	)
 
 	if not tasks:
 		return None
 
-	# Find the first cancelled task in the sequence
-	item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
-
-	# Get task sequence from Project Template
+	# Get task sequence from Project Template to map stage_type to index
 	task_sequence = get_task_sequence_from_template(project_name=project_name)
 	if not task_sequence:
 		return None
 
+	# Create a mapping of stage_type to index for efficient lookup
+	stage_to_index = {task_info["subject"]: index for index, task_info in enumerate(task_sequence)}
+
 	for task in tasks:
-		if task.status == "Cancelled":
-			# Find which task in the sequence this is
-			for index, task_item in enumerate(task_sequence):
-				# Handle both string and dict formats
-				if isinstance(task_item, dict):
-					task_name = task_item["subject"]
-				else:
-					task_name = task_item
-				expected_subject = f"{item_name} {task_name}"
-				if task.subject == expected_subject:
-					return {
-						"task_name": task.name,
-						"task_subject": task.subject,
-						"iteration_number": latest_iteration,
-						"task_index": index,
-					}
+		if task.status == "Cancelled" and task.stage_type:
+			# Use stage_type to find the index directly
+			task_index = stage_to_index.get(task.stage_type)
+			if task_index is not None:
+				return {
+					"task_name": task.name,
+					"task_subject": task.subject,
+					"iteration_number": latest_iteration,
+					"task_index": task_index,
+				}
 
 	return None
 
@@ -410,11 +406,15 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 					"project": project_name,
 					"part_number": part_number,
 					"iteration_number": iteration_number,
-					"stage_type": task_name,  # Store the stage name from template
+					"stage_type": task_subject,  # Store the stage name from template
 					"status": "Open",
 					"is_group": 0,
 				}
 			)
+
+			# Assign color from template task if available
+			if task_color:
+				task_doc.color = task_color
 
 			# Add dependency on previous task in this iteration if it exists
 			if previous_task_name:
@@ -510,6 +510,9 @@ def cancel_all_tasks_except_rfq(project_name, part_number, iteration_number):
 def mark_tasks_as_obsolete(project_name, part_number, iteration_number):
 	"""
 	Mark all incomplete tasks from a specific iteration as obsolete.
+
+	Note: This function is kept for backward compatibility but is no longer used
+	in create_new_iteration. Use cancel_all_tasks_except_rfq instead.
 
 	Args:
 		project_name (str): Name of the Project document

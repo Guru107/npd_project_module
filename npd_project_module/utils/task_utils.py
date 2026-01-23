@@ -21,7 +21,7 @@ def validate_task_cancellation(task_name, part_number, subject):
 	Args:
 		task_name: Name of the Task document
 		part_number: Part number (Item code)
-		subject: Task subject
+		subject: Task subject (kept for backward compatibility, but not used)
 
 	Returns:
 		dict: {"valid": bool, "message": str}
@@ -30,19 +30,21 @@ def validate_task_cancellation(task_name, part_number, subject):
 		return {"valid": True}
 
 	try:
+		# Get task document to access stage_type field
+		task_doc = frappe.get_doc("Task", task_name)
+
 		# Get project name from task
-		project_name = frappe.db.get_value("Task", task_name, "project")
+		project_name = task_doc.project
 		task_sequence = get_task_sequence_from_template(project_name=project_name)
 
-		item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
-
-		# Check if this is RFQ Data (first task, index 0)
+		# Check if this is RFQ Data (first task, index 0) using stage_type
 		if not task_sequence:
 			return {"valid": True}
-		rfq_task_name = task_sequence[0]  # "RFQ Data"
-		expected_rfq_subject = f"{item_name} {rfq_task_name}"
 
-		if subject == expected_rfq_subject:
+		rfq_stage_type = task_sequence[0]["subject"]  # RFQ Data stage_type is always first
+
+		# Use stage_type for exact matching instead of subject
+		if task_doc.stage_type and task_doc.stage_type == rfq_stage_type:
 			return {
 				"valid": False,
 				"message": _(
@@ -143,7 +145,7 @@ def handle_task_cancellation(task_name, part_number, iteration_number, project_n
 
 	try:
 		task_doc = frappe.get_doc("Task", task_name)
-		current_task_subject = task_doc.subject
+		current_task_stage_type = task_doc.stage_type
 		item_name = frappe.db.get_value("Item", part_number, "item_name") or part_number
 
 		# Get task sequence from Project Template
@@ -151,13 +153,11 @@ def handle_task_cancellation(task_name, part_number, iteration_number, project_n
 		if not task_sequence:
 			return {"success": True, "cancelled_count": 0}
 
-		# Find current task's position in sequence
-		current_task_index = None
-		for index, task_name_item in enumerate(task_sequence):
-			expected_subject = f"{item_name} {task_name_item}"
-			if current_task_subject == expected_subject:
-				current_task_index = index
-				break
+		# Create a mapping of stage_type to index for efficient lookup
+		stage_to_index = {task_info["subject"]: index for index, task_info in enumerate(task_sequence)}
+
+		# Find current task's position in sequence using stage_type
+		current_task_index = stage_to_index.get(current_task_stage_type) if current_task_stage_type else None
 
 		if current_task_index is None:
 			return {"success": True, "cancelled_count": 0}
@@ -171,7 +171,7 @@ def handle_task_cancellation(task_name, part_number, iteration_number, project_n
 				"iteration_number": iteration_number,
 				"status": ["!=", "Cancelled"],
 			},
-			fields=["name", "subject"],
+			fields=["name", "stage_type"],
 			order_by="creation",
 		)
 
@@ -181,21 +181,13 @@ def handle_task_cancellation(task_name, part_number, iteration_number, project_n
 			if task.name == task_name:
 				continue
 
-			task_doc_item = frappe.get_doc("Task", task.name)
-
-			# Find task's position in sequence
-			task_index = None
-			for index, task_name_item in enumerate(task_sequence):
-				expected_subject = f"{item_name} {task_name_item}"
-				if task_doc_item.subject == expected_subject:
-					task_index = index
-					break
+			# Find task's position in sequence using stage_type
+			task_index = stage_to_index.get(task.stage_type) if task.stage_type else None
 
 			# Cancel if it comes after the cancelled task
 			if task_index is not None and task_index > current_task_index:
-				if task_doc_item.status != "Cancelled":
-					frappe.db.set_value("Task", task_doc_item.name, "status", "Cancelled")
-					cancelled_count += 1
+				frappe.db.set_value("Task", task.name, "status", "Cancelled")
+				cancelled_count += 1
 
 		if cancelled_count > 0:
 			return {
