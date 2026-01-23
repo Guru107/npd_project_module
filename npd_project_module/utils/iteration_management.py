@@ -392,10 +392,13 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 		for index in range(start_index, len(task_sequence)):
 			# Handle both string and dict formats
 			task_item = task_sequence[index]
+			print("task_item", task_item)
 			if isinstance(task_item, dict):
 				task_name = task_item["subject"]
+				task_color = task_item.get("color")
 			else:
 				task_name = task_item
+				task_color = None
 			full_task_name = f"{item_name} {task_name}"
 
 			# Create task document
@@ -406,9 +409,10 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 					"project": project_name,
 					"part_number": part_number,
 					"iteration_number": iteration_number,
-					"stage_type": task_subject,  # Store the stage name from template
+					"stage_type": task_name,  # Store the stage name from template
 					"status": "Open",
 					"is_group": 0,
+					"color": task_color,
 				}
 			)
 
