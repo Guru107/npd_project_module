@@ -141,7 +141,7 @@ def handle_project_save(project_name, part_numbers_data):
 
 		return {"success": True, "message": _("Project saved successfully")}
 	except Exception as e:
-		frappe.log_error(f"Error handling project save: {e!s}", "Project Save Error", e)
+		frappe.log_error(f"Error handling project save: {e!s}", "Project Save Error")
 		return {"success": False, "message": str(e)}
 
 

@@ -3,6 +3,10 @@
 
 frappe.ui.form.on("Project", {
 	validate: function (frm) {
+		if (!frm.doc.part_numbers || frm.doc.part_numbers.length === 0) {
+			return;
+		}
+
 		const part_numbers = frm.doc.part_numbers.map((row) => row.part_number).filter(Boolean);
 
 		if (part_numbers.length === 0) {
