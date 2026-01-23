@@ -6,8 +6,8 @@ Unit tests for Part Stage Matrix report.
 """
 
 import frappe
-from frappe.tests import IntegrationTestCase
 
+from npd_project_module.tests.compat import IntegrationTestCase
 from npd_project_module.npd_project_module.report.part_stage_matrix.part_stage_matrix import (
 	PartStageMatrix,
 )

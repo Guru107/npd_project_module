@@ -7,8 +7,8 @@ These tests verify end-to-end functionality across multiple components.
 """
 
 import frappe
-from frappe.tests import IntegrationTestCase
 
+from npd_project_module.tests.compat import IntegrationTestCase
 from npd_project_module.tests.utils import (
 	NPDProjectModuleTestSuite,
 	cleanup_test_data,

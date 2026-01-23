@@ -392,7 +392,6 @@ def generate_tasks_from_cancelled_task(project_name, part_number, iteration_numb
 		for index in range(start_index, len(task_sequence)):
 			# Handle both string and dict formats
 			task_item = task_sequence[index]
-			print("task_item", task_item)
 			if isinstance(task_item, dict):
 				task_name = task_item["subject"]
 				task_color = task_item.get("color")
