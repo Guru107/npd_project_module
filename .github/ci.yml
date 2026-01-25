@@ -11,7 +11,7 @@ on:
       frappe_version:
         description: 'Frappe version to use'
         required: false
-        default: 'version-16-beta'
+        default: 'version-16'
         type: string
       app-name:
         description: 'App name to use'
