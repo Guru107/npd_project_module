@@ -27,7 +27,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     env:
-      FRAPPE_VERSION: ${{ github.event.inputs.frappe_version || 'version-16-beta' }}
+      FRAPPE_VERSION: ${{ github.event.inputs.frappe_version || 'version-16' }}
       APP_NAME: ${{ github.event.inputs['app-name'] || 'npd_project_module' }}
 
     services:
