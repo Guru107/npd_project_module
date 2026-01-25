@@ -10,7 +10,19 @@ test_records = [
     {
         "doctype": "Warehouse Type",
         "name": "Transit"
-    }
+    },
+	{
+		"doctype": "GST HSN Code",
+		"name": "61149090"
+	},
+	{
+		"doctype": "UOM",
+		"name": "Nos"
+	},
+	{
+		"doctype": "Warehouse",
+		"name": "Stores"
+	}
 ]
-EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","Company", "User","Item","Project Template"]
+EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","GST HSN Code","UOM","Warehouse","Company", "User","Item","Project Template"]
 
