@@ -11,6 +11,43 @@ from frappe.utils import nowdate
 from npd_project_module.tests.compat import IntegrationTestCase
 
 
+def ensure_test_fixtures():
+	"""
+	Ensure required test fixtures exist for creating Items and Projects.
+	Creates Item Group, UOM, and Company if they don't exist.
+	"""
+	# Ensure Item Group "Products" exists
+	if not frappe.db.exists("Item Group", "Products"):
+		item_group = frappe.get_doc({
+			"doctype": "Item Group",
+			"item_group_name": "Products",
+			"parent_item_group": "All Item Groups",
+			"is_group": 0,
+		})
+		item_group.insert(ignore_permissions=True)
+
+	# Ensure UOM "Nos" exists
+	if not frappe.db.exists("UOM", "Nos"):
+		uom = frappe.get_doc({
+			"doctype": "UOM",
+			"uom_name": "Nos",
+		})
+		uom.insert(ignore_permissions=True)
+
+	# Ensure "_Test Company" exists
+	if not frappe.db.exists("Company", "_Test Company"):
+		company = frappe.get_doc({
+			"doctype": "Company",
+			"company_name": "_Test Company",
+			"abbr": "_TC",
+			"country": "India",
+			"default_currency": "INR",
+		})
+		company.insert(ignore_permissions=True)
+
+	frappe.db.commit()
+
+
 def make_test_item(item_code, item_name=None, **kwargs):
 	"""
 	Create a test Item (part) for testing.
@@ -26,6 +63,9 @@ def make_test_item(item_code, item_name=None, **kwargs):
 	if frappe.db.exists("Item", item_code):
 		return frappe.get_doc("Item", item_code)
 
+	# Ensure required fixtures exist
+	ensure_test_fixtures()
+
 	item_data = {
 		"doctype": "Item",
 		"item_code": item_code,
@@ -35,7 +75,6 @@ def make_test_item(item_code, item_name=None, **kwargs):
 		"is_stock_item": kwargs.get("is_stock_item", 0),
 		"include_item_in_manufacturing": kwargs.get("include_item_in_manufacturing", 0),
 	}
-
 
 	# Override with any provided kwargs
 	item_data.update(kwargs)
@@ -62,6 +101,9 @@ def make_test_project(project_name, **kwargs):
 	existing = frappe.get_all("Project", filters={"project_name": project_name}, fields=["name"])
 	if existing:
 		return frappe.get_doc("Project", existing[0]["name"])
+
+	# Ensure required fixtures exist
+	ensure_test_fixtures()
 
 	project_data = {
 		"doctype": "Project",
