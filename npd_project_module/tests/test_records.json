@@ -4,5 +4,23 @@
 			"doctype": "Warehouse Type",
 			"name": "Transit"
 		}
+	],
+	"UOM": [
+		{
+			"doctype": "UOM",
+			"name": "Nos"
+		}
+	],
+	"Warehouse": [
+		{
+			"doctype": "Warehouse",
+			"name": "Stores"
+		}
+	],
+	"Item Group": [
+		{
+			"doctype": "Item Group",
+			"name": "Products"
+		}
 	]
 }
