@@ -6,8 +6,9 @@ Test utilities and fixtures for NPD Project Module tests.
 """
 
 import frappe
-from frappe.tests import IntegrationTestCase
 from frappe.utils import nowdate
+
+from npd_project_module.tests.compat import IntegrationTestCase
 
 
 def make_test_item(item_code, item_name=None, **kwargs):
@@ -161,9 +162,13 @@ def cleanup_test_data(project_name=None, item_codes=None):
 		# Get project document name first
 		project_doc_name = None
 		try:
-			if frappe.db.exists("Project", {"project_name": project_name}):
-				project_doc = frappe.get_doc("Project", {"project_name": project_name})
-				project_doc_name = project_doc.name
+			# In Frappe v15/v16, get_doc doesn't accept dict filters directly
+			# Need to get the name first using get_all or get_value
+			project_docs = frappe.get_all(
+				"Project", filters={"project_name": project_name}, fields=["name"], limit=1
+			)
+			if project_docs:
+				project_doc_name = project_docs[0]["name"]
 		except Exception:
 			pass
 

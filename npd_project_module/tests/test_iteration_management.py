@@ -6,8 +6,8 @@ Unit tests for iteration_management.py
 """
 
 import frappe
-from frappe.tests import IntegrationTestCase
 
+from npd_project_module.tests.compat import IntegrationTestCase
 from npd_project_module.tests.utils import (
 	NPDProjectModuleTestSuite,
 	cleanup_test_data,
@@ -15,6 +15,7 @@ from npd_project_module.tests.utils import (
 	make_test_project,
 )
 from npd_project_module.utils.iteration_management import (
+	cancel_all_tasks_except_rfq,
 	create_new_iteration,
 	generate_tasks_from_cancelled_task,
 	get_cancelled_task_for_part,
@@ -256,7 +257,7 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		self.assertEqual(len(cancelled_tasks), 18)
 
 	def test_create_new_iteration(self):
-		"""Test creating a new iteration - all tasks from previous iteration should be cancelled except RFQ Data."""
+		"""Test creating a new iteration - all tasks from previous iteration should be cancelled except completed tasks and RFQ Data."""
 		self.test_item = make_test_item("_Test Item New Iter 1")
 		self.test_project = make_test_project("_Test Project New Iter 1")
 
@@ -267,7 +268,7 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 			iteration_number=0,
 		)
 
-		# Mark some tasks as completed to test that completed tasks are also cancelled
+		# Mark some tasks as completed to test that completed tasks are preserved
 		tasks = frappe.get_all(
 			"Task",
 			filters={
@@ -278,9 +279,11 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 			order_by="creation",
 		)
 		# Mark a few tasks as completed (not RFQ Data which is first)
+		completed_tasks = []
 		if len(tasks) > 2:
 			frappe.db.set_value("Task", tasks[1]["name"], "status", "Completed")
 			frappe.db.set_value("Task", tasks[2]["name"], "status", "Completed")
+			completed_tasks = [tasks[1]["name"], tasks[2]["name"]]
 			frappe.db.commit()
 
 		# Get RFQ Data task (first task) to verify it's not cancelled
@@ -292,13 +295,19 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		self.assertEqual(result["new_iteration_number"], 1)
 		self.assertEqual(len(result["tasks_created"]), 17)  # Starts from 2nd stage (17 tasks)
 		self.assertGreater(result["tasks_cancelled"], 0)  # Should have cancelled tasks
+		self.assertGreater(result["tasks_preserved"], 0)  # Should have preserved tasks (completed + RFQ Data)
 
 		# Verify RFQ Data task is NOT cancelled
 		if rfq_task:
 			rfq_task_doc = frappe.get_doc("Task", rfq_task["name"])
 			self.assertNotEqual(rfq_task_doc.status, "Cancelled")
 
-		# Verify all other tasks from iteration 0 are cancelled (including completed ones)
+		# Verify completed tasks are NOT cancelled
+		for task_name in completed_tasks:
+			task_doc = frappe.get_doc("Task", task_name)
+			self.assertEqual(task_doc.status, "Completed", f"Task {task_name} should remain Completed")
+
+		# Verify all other tasks from iteration 0 are cancelled (including Open/Working ones)
 		all_iter_0_tasks = frappe.get_all(
 			"Task",
 			filters={
@@ -310,11 +319,13 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		)
 		for task in all_iter_0_tasks:
 			task_doc = frappe.get_doc("Task", task["name"])
-			# RFQ Data should not be cancelled, all others should be
-			if task["name"] == rfq_task["name"]:
-				self.assertNotEqual(task_doc.status, "Cancelled")
+			# RFQ Data and completed tasks should not be cancelled, all others should be
+			if task["name"] == rfq_task["name"] or task["name"] in completed_tasks:
+				self.assertNotEqual(
+					task_doc.status, "Cancelled", f"Task {task['name']} should not be cancelled"
+				)
 			else:
-				self.assertEqual(task_doc.status, "Cancelled")
+				self.assertEqual(task_doc.status, "Cancelled", f"Task {task['name']} should be cancelled")
 
 		# Verify new iteration tasks exist
 		tasks_iter_1 = frappe.get_all(
@@ -328,7 +339,7 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		self.assertEqual(len(tasks_iter_1), 17)
 
 	def test_create_new_iteration_no_cancelled_task(self):
-		"""Test creating iteration when no cancelled task exists - should still work and cancel all tasks except RFQ Data."""
+		"""Test creating iteration when no cancelled task exists - should still work and cancel all tasks except completed and RFQ Data."""
 		self.test_item = make_test_item("_Test Item No Cancel 1")
 		self.test_project = make_test_project("_Test Project No Cancel 1")
 
@@ -350,9 +361,11 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 			order_by="creation",
 		)
 		# Mark a few tasks as completed
+		completed_tasks = []
 		if len(tasks) > 2:
 			frappe.db.set_value("Task", tasks[1]["name"], "status", "Completed")
 			frappe.db.set_value("Task", tasks[2]["name"], "status", "Completed")
+			completed_tasks = [tasks[1]["name"], tasks[2]["name"]]
 			frappe.db.commit()
 
 		# Get RFQ Data task (first task)
@@ -368,7 +381,12 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 			rfq_task_doc = frappe.get_doc("Task", rfq_task["name"])
 			self.assertNotEqual(rfq_task_doc.status, "Cancelled")
 
-		# Verify all other tasks from iteration 0 are cancelled (including completed ones)
+		# Verify completed tasks are NOT cancelled
+		for task_name in completed_tasks:
+			task_doc = frappe.get_doc("Task", task_name)
+			self.assertEqual(task_doc.status, "Completed", f"Task {task_name} should remain Completed")
+
+		# Verify all other tasks from iteration 0 are cancelled (including Open/Working ones)
 		all_iter_0_tasks = frappe.get_all(
 			"Task",
 			filters={
@@ -380,11 +398,91 @@ class TestIterationManagement(NPDProjectModuleTestSuite):
 		)
 		for task in all_iter_0_tasks:
 			task_doc = frappe.get_doc("Task", task["name"])
-			# RFQ Data should not be cancelled, all others should be
-			if task["name"] == rfq_task["name"]:
-				self.assertNotEqual(task_doc.status, "Cancelled")
+			# RFQ Data and completed tasks should not be cancelled, all others should be
+			if task["name"] == rfq_task["name"] or task["name"] in completed_tasks:
+				self.assertNotEqual(
+					task_doc.status, "Cancelled", f"Task {task['name']} should not be cancelled"
+				)
 			else:
-				self.assertEqual(task_doc.status, "Cancelled")
+				self.assertEqual(task_doc.status, "Cancelled", f"Task {task['name']} should be cancelled")
+
+	def test_preserve_completed_tasks_on_iteration(self):
+		"""Test that completed tasks are preserved when creating a new iteration."""
+		self.test_item = make_test_item("_Test Item Preserve Completed")
+		self.test_project = make_test_project("_Test Project Preserve Completed")
+
+		# Create iteration 0
+		generate_tasks_for_part(
+			project_name=self.test_project.name,
+			part_number=self.test_item.item_code,
+			iteration_number=0,
+		)
+
+		# Get all tasks
+		tasks = frappe.get_all(
+			"Task",
+			filters={
+				"project": self.test_project.name,
+				"part_number": self.test_item.item_code,
+				"iteration_number": 0,
+			},
+			order_by="creation",
+		)
+
+		# Mark multiple tasks as completed (not RFQ Data)
+		completed_task_names = []
+		if len(tasks) >= 5:
+			# Mark tasks 1, 2, 3, 4 as completed
+			for i in range(1, 5):
+				frappe.db.set_value("Task", tasks[i]["name"], "status", "Completed")
+				completed_task_names.append(tasks[i]["name"])
+			frappe.db.commit()
+
+		# Mark one task as Working
+		working_task_name = None
+		if len(tasks) >= 6:
+			frappe.db.set_value("Task", tasks[5]["name"], "status", "Working")
+			working_task_name = tasks[5]["name"]
+			frappe.db.commit()
+
+		# Get RFQ Data task
+		rfq_task_name = tasks[0]["name"] if tasks else None
+
+		# Test cancel_all_tasks_except_rfq directly
+		result = cancel_all_tasks_except_rfq(
+			project_name=self.test_project.name,
+			part_number=self.test_item.item_code,
+			iteration_number=0,
+		)
+
+		# Verify return value structure
+		self.assertIn("cancelled", result)
+		self.assertIn("preserved", result)
+		self.assertGreater(result["preserved"], 0)  # Should preserve completed tasks + RFQ Data
+		self.assertGreater(result["cancelled"], 0)  # Should cancel non-completed tasks
+
+		# Verify RFQ Data is preserved
+		if rfq_task_name:
+			rfq_task_doc = frappe.get_doc("Task", rfq_task_name)
+			self.assertNotEqual(rfq_task_doc.status, "Cancelled", "RFQ Data should never be cancelled")
+
+		# Verify completed tasks are preserved
+		for task_name in completed_task_names:
+			task_doc = frappe.get_doc("Task", task_name)
+			self.assertEqual(
+				task_doc.status, "Completed", f"Completed task {task_name} should remain Completed"
+			)
+
+		# Verify Working task is cancelled
+		if working_task_name:
+			working_task_doc = frappe.get_doc("Task", working_task_name)
+			self.assertEqual(working_task_doc.status, "Cancelled", "Working task should be cancelled")
+
+		# Verify return value includes correct counts
+		expected_preserved = len(completed_task_names) + 1  # Completed tasks + RFQ Data
+		self.assertEqual(
+			result["preserved"], expected_preserved, "Preserved count should match completed tasks + RFQ Data"
+		)
 
 	def test_create_new_iteration_max_limit(self):
 		"""Test creating iteration when max limit reached."""

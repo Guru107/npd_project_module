@@ -270,14 +270,11 @@ function update_iteration_info(project_name, part_number, dialog) {
 							info.latest_iteration
 						}</p>`;
 
+						// Show cancelled task info if available (informational only, not required)
 						if (info.cancelled_task) {
 							infoHTML += `<p><strong>${__("Cancelled Task")}:</strong> ${
 								info.cancelled_task.task_subject || info.cancelled_task.task_name
 							}</p>`;
-						} else {
-							infoHTML += `<p class="text-warning">${__(
-								"No cancelled task found in latest iteration. Cannot create new iteration."
-							)}</p>`;
 						}
 
 						// New iteration always starts from the 2nd stage: "Internal Team Technical Feasibility"
@@ -298,7 +295,7 @@ function update_iteration_info(project_name, part_number, dialog) {
 							infoHTML += `<p class="text-warning"><strong>${__(
 								"Warning"
 							)}:</strong> ${info.incomplete_tasks_count} ${__(
-								"incomplete task(s) in previous iteration will be marked as obsolete."
+								"incomplete task(s) in previous iteration will be cancelled (completed tasks will be preserved)."
 							)}</p>`;
 						}
 					} else {
@@ -317,7 +314,7 @@ function update_iteration_info(project_name, part_number, dialog) {
 					if (info.incomplete_tasks_count > 0) {
 						warningHTML = `<div class="alert alert-warning">
 							<strong>${__("Warning")}:</strong> ${__(
-							"The previous iteration has {0} incomplete task(s). These will be marked as obsolete when you create the new iteration.",
+							"The previous iteration has {0} incomplete task(s). These will be cancelled when you create the new iteration. Completed tasks will be preserved.",
 							[info.incomplete_tasks_count]
 						)}
 						</div>`;

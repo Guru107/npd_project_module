@@ -6,8 +6,8 @@ Unit tests for task_utils.py
 """
 
 import frappe
-from frappe.tests import IntegrationTestCase
 
+from npd_project_module.tests.compat import IntegrationTestCase
 from npd_project_module.tests.utils import (
 	NPDProjectModuleTestSuite,
 	cleanup_test_data,

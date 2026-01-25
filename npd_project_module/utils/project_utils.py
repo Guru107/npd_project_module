@@ -49,7 +49,7 @@ def validate_project_parts(project_name, part_numbers):
 
 
 @frappe.whitelist()
-def handle_project_save(project_name, part_numbers_data):
+def handle_project_save(project_name, part_numbers_data, is_new=None):
 	"""
 	Handle task generation and project assignment after project save.
 	This is called from client script after save.
@@ -57,6 +57,7 @@ def handle_project_save(project_name, part_numbers_data):
 	Args:
 		project_name: Name of the Project document
 		part_numbers_data: List of dicts with part_number and iteration_number (may be JSON string)
+		is_new: Optional flag indicating if this is a new project (for backward compatibility with tests)
 
 	Returns:
 		dict: {"success": bool, "message": str}
@@ -207,7 +208,6 @@ def _handle_part_removal(project_name, current_part_numbers):
 	for part_number in removed_parts:
 		# Delete tasks for this part
 		delete_tasks_for_part(project_name=project_name, part_number=part_number)
-
 		# Clear project reference from Item
 		frappe.db.set_value("Item", part_number, "project", None)
 

@@ -7,8 +7,8 @@ These tests verify end-to-end functionality across multiple components.
 """
 
 import frappe
-from frappe.tests import IntegrationTestCase
 
+from npd_project_module.tests.compat import IntegrationTestCase
 from npd_project_module.tests.utils import (
 	NPDProjectModuleTestSuite,
 	cleanup_test_data,
@@ -138,7 +138,7 @@ class TestIntegrationWorkflows(NPDProjectModuleTestSuite):
 		)
 		self.assertEqual(len(tasks_iter_0), 18)
 
-		# Cancel a task (not RFQ Data)
+		# Mark some tasks as completed and cancel one task (not RFQ Data)
 		tasks = frappe.get_all(
 			"Task",
 			filters={
@@ -148,15 +148,35 @@ class TestIntegrationWorkflows(NPDProjectModuleTestSuite):
 			},
 			order_by="creation",
 		)
-		if len(tasks) > 1:
-			frappe.db.set_value("Task", tasks[1]["name"], "status", "Cancelled")
+		completed_tasks = []
+		if len(tasks) > 2:
+			# Mark task 1 as completed
+			frappe.db.set_value("Task", tasks[1]["name"], "status", "Completed")
+			completed_tasks.append(tasks[1]["name"])
+			# Cancel task 2
+			frappe.db.set_value("Task", tasks[2]["name"], "status", "Cancelled")
 			frappe.db.commit()
+
+		# Get RFQ Data task (first task)
+		rfq_task = tasks[0] if tasks else None
 
 		# Create new iteration
 		result = create_new_iteration(project.name, item.item_code)
 		self.assertTrue(result["success"])
 		self.assertEqual(result["new_iteration_number"], 1)
 		self.assertEqual(len(result["tasks_created"]), 17)  # Starts from 2nd stage
+		self.assertGreater(result["tasks_cancelled"], 0)  # Should have cancelled tasks
+		self.assertGreater(result["tasks_preserved"], 0)  # Should have preserved tasks (completed + RFQ Data)
+
+		# Verify completed tasks are preserved
+		for task_name in completed_tasks:
+			task_doc = frappe.get_doc("Task", task_name)
+			self.assertEqual(task_doc.status, "Completed", f"Task {task_name} should remain Completed")
+
+		# Verify RFQ Data is not cancelled
+		if rfq_task:
+			rfq_task_doc = frappe.get_doc("Task", rfq_task["name"])
+			self.assertNotEqual(rfq_task_doc.status, "Cancelled", "RFQ Data should not be cancelled")
 
 		# Verify iteration 1 tasks
 		tasks_iter_1 = frappe.get_all(

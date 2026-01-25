@@ -22,6 +22,7 @@ def execute(filters=None):
 		filters (dict): Report filters containing:
 			- project (str): Project name (required)
 			- part_number (list): List of part numbers (Items) to filter (optional)
+			- show_all_iterations (int): If 1, shows all iterations for selected parts (optional, default: 0)
 
 	Returns:
 		tuple: (columns, data, message, chart, report_summary)
@@ -34,7 +35,9 @@ class PartStageMatrix:
 		self.filters = frappe._dict(filters or {})
 		self.project = self.filters.get("project")
 		self.part_numbers = self.filters.get("part_number") or []
+		self.show_all_iterations = self.filters.get("show_all_iterations", 0)
 		self.task_sequence = None  # Will be set in get_data()
+		self.part_iterations = {}  # Will store {part_code: [iteration_numbers]} when show_all_iterations is True
 
 	def run(self):
 		"""Run the report and return formatted data."""
@@ -63,19 +66,43 @@ class PartStageMatrix:
 		# Get all parts for the project
 		parts = self.get_parts()
 
-		# Add a column for each part
-		for part in parts:
-			part_code = part.get("name")
-			part_name = part.get("item_name") or part_code
+		if self.show_all_iterations and self.part_numbers:
+			# "Show All Iterations" view: Create columns for each iteration of each selected part
+			# Get all iterations for selected parts
+			self.part_iterations = self.get_all_iterations_for_parts([p.get("name") for p in parts])
 
-			self.columns.append(
-				{
-					"label": f"{part_name} ({part_code})",
-					"fieldname": f"part_{part_code}",
-					"fieldtype": "Data",
-					"width": 150,
-				}
-			)
+			for part in parts:
+				part_code = part.get("name")
+				part_name = part.get("item_name") or part_code
+				iterations = self.part_iterations.get(part_code, [0])  # Default to [0] if no iterations found
+
+				# Sort iterations in descending order (latest first) for "Show All Iterations" view
+				sorted_iterations = sorted(iterations, reverse=True)
+
+				# Create a column for each iteration (latest iteration first)
+				for iteration in sorted_iterations:
+					self.columns.append(
+						{
+							"label": f"{part_name} ({part_code}) (Iter {iteration})",
+							"fieldname": f"part_{part_code}_iter_{iteration}",
+							"fieldtype": "Data",
+							"width": 150,
+						}
+					)
+		else:
+			# Default view: One column per part (shows latest iteration)
+			for part in parts:
+				part_code = part.get("name")
+				part_name = part.get("item_name") or part_code
+
+				self.columns.append(
+					{
+						"label": f"{part_name} ({part_code})",
+						"fieldname": f"part_{part_code}",
+						"fieldtype": "Data",
+						"width": 150,
+					}
+				)
 
 	def get_parts(self):
 		"""Get all parts (Items) for the project, optionally filtered."""
@@ -105,6 +132,55 @@ class PartStageMatrix:
 
 		return parts
 
+	def get_all_iterations_for_parts(self, part_codes):
+		"""
+		Get all iteration numbers for the specified parts.
+
+		Args:
+			part_codes (list): List of part/Item codes
+
+		Returns:
+			dict: {part_code: [iteration_numbers]} - Dictionary mapping part codes to their iteration numbers
+		"""
+		if not part_codes:
+			return {}
+
+		# Get all tasks for these parts to find all iterations
+		tasks = frappe.get_all(
+			"Task",
+			filters={
+				"project": self.project,
+				"part_number": ["in", part_codes],
+			},
+			fields=["part_number", "iteration_number"],
+			distinct=True,
+		)
+
+		# Group iterations by part
+		part_iterations = {}
+		for task in tasks:
+			part_code = task.get("part_number")
+			iteration = task.get("iteration_number") or 0
+
+			if part_code not in part_iterations:
+				part_iterations[part_code] = []
+
+			if iteration not in part_iterations[part_code]:
+				part_iterations[part_code].append(iteration)
+
+		# Ensure each part has at least iteration 0
+		for part_code in part_codes:
+			if part_code not in part_iterations:
+				part_iterations[part_code] = [0]
+			elif 0 not in part_iterations[part_code]:
+				part_iterations[part_code].append(0)
+
+		# Sort iterations for each part
+		for part_code in part_iterations:
+			part_iterations[part_code] = sorted(part_iterations[part_code])
+
+		return part_iterations
+
 	def get_data(self):
 		"""Build matrix data: rows = stages, columns = parts."""
 		self.data = []
@@ -121,14 +197,34 @@ class PartStageMatrix:
 		tasks = self.get_tasks(part_codes)
 
 		# Build matrix: for each stage, get status for each part
-		for stage_index, stage_info in enumerate(self.task_sequence):
-			stage_name = stage_info["subject"]
+		for stage_index, stage_item in enumerate(self.task_sequence):
+			# Handle both string and dict formats (backward compatibility)
+			if isinstance(stage_item, dict):
+				stage_name = stage_item["subject"]
+			else:
+				stage_name = stage_item
 			row = {"stage": stage_name}
 
-			for part in parts:
-				part_code = part.get("name")
-				status = self.get_stage_status_for_part(tasks, part_code, stage_index, stage_name)
-				row[f"part_{part_code}"] = status
+			if self.show_all_iterations and self.part_numbers:
+				# "Show All Iterations" view: Create cells for each iteration of each part
+				for part in parts:
+					part_code = part.get("name")
+					iterations = self.part_iterations.get(part_code, [0])
+
+					# Sort iterations in descending order (latest first) to match column order
+					sorted_iterations = sorted(iterations, reverse=True)
+
+					for iteration in sorted_iterations:
+						status = self.get_stage_status_for_part_and_iteration(
+							tasks, part_code, stage_index, stage_name, iteration
+						)
+						row[f"part_{part_code}_iter_{iteration}"] = status
+			else:
+				# Default view: Show latest iteration status for each part
+				for part in parts:
+					part_code = part.get("name")
+					status = self.get_stage_status_for_part(tasks, part_code, stage_index, stage_name)
+					row[f"part_{part_code}"] = status
 
 			self.data.append(row)
 
@@ -155,13 +251,16 @@ class PartStageMatrix:
 
 	def get_stage_status_for_part(self, tasks, part_code, stage_index, stage_name):
 		"""
-		Get the status of a stage for a specific part.
+		Get the status of a stage for a specific part from the latest iteration only.
 
 		Logic:
-		1. Check if stage is completed in any iteration (aggregate across iterations)
-		2. If not completed, check latest iteration status
-		3. If no task exists, check if it's blocked (dependencies not met)
-		4. Return appropriate status string
+		1. Identify the latest iteration number for this part
+		2. Special handling for RFQ Data (stage_index == 0):
+		   - If RFQ Data is completed in iteration 0, always show as "Completed (Iter 0)"
+		   - Otherwise, check latest iteration status
+		3. For other stages: Get task for this stage in the latest iteration only
+		4. If no task exists in latest iteration, check if it's blocked or not started
+		5. Return status string with iteration number: "{status} (Iter {iteration_number})"
 
 		Args:
 			tasks (list): All tasks for the project
@@ -170,7 +269,7 @@ class PartStageMatrix:
 			stage_name (str): Name of the stage
 
 		Returns:
-			str: Status string (e.g., "Completed", "In Progress", "Blocked", "Not Started")
+			str: Status string with iteration number (e.g., "Completed (Iter 0)", "Completed (Iter 1)", "Not Started (Iter 2)")
 		"""
 		# Filter tasks for this part
 		part_tasks = [t for t in tasks if t.get("part_number") == part_code]
@@ -178,50 +277,94 @@ class PartStageMatrix:
 		if not part_tasks:
 			return "No Tasks"
 
-		# Check if stage is completed in any iteration (aggregate across iterations)
-		completed_tasks = [
-			t for t in part_tasks if self.is_stage_task(t, stage_name) and t.get("status") == "Completed"
-		]
-
-		if completed_tasks:
-			return "Completed"
-
 		# Get latest iteration number for this part
 		latest_iteration = max([t.get("iteration_number") or 0 for t in part_tasks], default=0)
 
-		# Get task for this stage in latest iteration
+		# Special handling for RFQ Data (stage_index == 0)
+		# RFQ Data is always created in iteration 0 and never cancelled
+		# If completed in iteration 0, it should show as Completed even in later iterations
+		if stage_index == 0:
+			# Check if RFQ Data is completed in iteration 0
+			rfq_iter_0_task = None
+			for t in part_tasks:
+				if t.get("iteration_number") == 0 and self.is_stage_task(t, stage_name):
+					rfq_iter_0_task = t
+					break
+
+			if rfq_iter_0_task and rfq_iter_0_task.get("status") == "Completed":
+				# RFQ Data completed in iteration 0 - show as Completed (Iter 0)
+				return "Completed (Iter 0)"
+
+			# RFQ Data not completed in iteration 0, check latest iteration
+			latest_task = None
+			for t in part_tasks:
+				if t.get("iteration_number") == latest_iteration and self.is_stage_task(t, stage_name):
+					latest_task = t
+					break
+
+			if latest_task:
+				# Check if task is blocked
+				if self.is_task_blocked(latest_task, part_tasks):
+					return f"Blocked (Iter {latest_iteration})"
+
+				# Return status based on task status with iteration number
+				task_status = latest_task.get("status", "Open")
+				status_map = {
+					"Open": "Not Started",
+					"Working": "In Progress",
+					"Completed": "Completed",
+					"Cancelled": "Cancelled",
+					"Overdue": "Overdue",
+				}
+				mapped_status = status_map.get(task_status, task_status)
+				return f"{mapped_status} (Iter {latest_iteration})"
+			else:
+				# RFQ Data should always exist
+				return f"Not Started (Iter {latest_iteration})"
+
+		# Get task for this stage in latest iteration only
 		latest_task = None
 		for t in part_tasks:
 			if t.get("iteration_number") == latest_iteration and self.is_stage_task(t, stage_name):
 				latest_task = t
 				break
 
+		# Determine status and format with iteration number
 		if not latest_task:
+			# No task exists for this stage in latest iteration
 			# Check if this stage should exist (based on iteration start point)
-			# Stage 0 (RFQ Data) always exists
 			# Stages 1+ only exist if previous iterations had tasks
-			if stage_index == 0:
-				# RFQ Data should always exist
-				return "Not Started"
+			# Check if previous stage exists in latest iteration
+			if stage_index > 0 and self.task_sequence:
+				prev_stage_item = self.task_sequence[stage_index - 1]
+				# Handle both string and dict formats (backward compatibility)
+				if isinstance(prev_stage_item, dict):
+					prev_stage_name = prev_stage_item["subject"]
+				else:
+					prev_stage_name = prev_stage_item
+				# Check if previous stage exists in latest iteration
+				prev_stage_exists = any(
+					t.get("iteration_number") == latest_iteration and self.is_stage_task(t, prev_stage_name)
+					for t in part_tasks
+				)
+				if not prev_stage_exists:
+					status = "Not Started"
+				else:
+					# Check if blocked by dependencies
+					blocked_status = self.check_if_blocked(part_tasks, stage_index, latest_iteration)
+					status = blocked_status
 			else:
-				# Check if previous stage exists in any iteration
-				if stage_index > 0 and self.task_sequence:
-					prev_stage_info = self.task_sequence[stage_index - 1]
-					prev_stage_name = prev_stage_info["subject"]
-					prev_stage_exists = any(self.is_stage_task(t, prev_stage_name) for t in part_tasks)
-					if not prev_stage_exists:
-						return "Not Started"
-					else:
-						# Check if blocked by dependencies
-						return self.check_if_blocked(part_tasks, stage_index, latest_iteration)
-				return "Not Started"
+				status = "Not Started"
+
+			# Return status with iteration number
+			return f"{status} (Iter {latest_iteration})"
 
 		# Check if task is blocked
 		if self.is_task_blocked(latest_task, part_tasks):
-			return "Blocked"
+			return f"Blocked (Iter {latest_iteration})"
 
-		# Return status based on task status
-		status = latest_task.get("status", "Open")
+		# Return status based on task status with iteration number
+		task_status = latest_task.get("status", "Open")
 		status_map = {
 			"Open": "Not Started",
 			"Working": "In Progress",
@@ -230,7 +373,159 @@ class PartStageMatrix:
 			"Overdue": "Overdue",
 		}
 
-		return status_map.get(status, status)
+		mapped_status = status_map.get(task_status, task_status)
+		return f"{mapped_status} (Iter {latest_iteration})"
+
+	def get_stage_status_for_part_and_iteration(
+		self, tasks, part_code, stage_index, stage_name, iteration_number
+	):
+		"""
+		Get the status of a stage for a specific part and iteration.
+		Used in "Show All Iterations" view.
+
+		If a task doesn't exist in the current iteration, the status from the most recent
+		previous iteration that had a task for this stage will be returned.
+
+		Args:
+			tasks (list): All tasks for the project
+			part_code (str): Part/Item code
+			stage_index (int): Index of stage in task sequence
+			stage_name (str): Name of the stage
+			iteration_number (int): Specific iteration number to check
+
+		Returns:
+			str: Status string (e.g., "Completed", "Not Started", "Blocked")
+		"""
+		# Filter tasks for this part (all iterations, not just current)
+		all_part_tasks = [t for t in tasks if t.get("part_number") == part_code]
+
+		# Filter tasks for this part and iteration
+		part_tasks = [t for t in all_part_tasks if t.get("iteration_number") == iteration_number]
+
+		# Special handling for RFQ Data (stage_index == 0)
+		if stage_index == 0:
+			# RFQ Data always exists in iteration 0
+			if iteration_number == 0:
+				# Check if RFQ Data task exists and its status
+				rfq_task = None
+				for t in part_tasks:
+					if self.is_stage_task(t, stage_name):
+						rfq_task = t
+						break
+
+				if rfq_task:
+					# Check if task is blocked
+					if self.is_task_blocked(rfq_task, part_tasks):
+						return "Blocked"
+
+					# Return status based on task status
+					task_status = rfq_task.get("status", "Open")
+					status_map = {
+						"Open": "Not Started",
+						"Working": "In Progress",
+						"Completed": "Completed",
+						"Cancelled": "Cancelled",
+						"Overdue": "Overdue",
+					}
+					return status_map.get(task_status, task_status)
+				else:
+					return "Not Started"
+			else:
+				# RFQ Data only exists in iteration 0, so for other iterations show status from iteration 0
+				# Check iteration 0 for RFQ Data status
+				rfq_iter_0_tasks = [t for t in all_part_tasks if t.get("iteration_number") == 0]
+				rfq_task = None
+				for t in rfq_iter_0_tasks:
+					if self.is_stage_task(t, stage_name):
+						rfq_task = t
+						break
+
+				if rfq_task:
+					task_status = rfq_task.get("status", "Open")
+					status_map = {
+						"Open": "Not Started",
+						"Working": "In Progress",
+						"Completed": "Completed",
+						"Cancelled": "Cancelled",
+						"Overdue": "Overdue",
+					}
+					return status_map.get(task_status, task_status)
+				else:
+					return "Not Started"
+
+		# For other stages, check if task exists in this iteration
+		iteration_task = None
+		for t in part_tasks:
+			if self.is_stage_task(t, stage_name):
+				iteration_task = t
+				break
+
+		if not iteration_task:
+			# Task doesn't exist in this iteration
+			# Look for status from previous iterations (in descending order)
+			# This cascades the status from the most recent previous iteration that had this stage
+			for prev_iter in range(iteration_number - 1, -1, -1):
+				prev_iter_tasks = [t for t in all_part_tasks if t.get("iteration_number") == prev_iter]
+				prev_iter_task = None
+				for t in prev_iter_tasks:
+					if self.is_stage_task(t, stage_name):
+						prev_iter_task = t
+						break
+
+				if prev_iter_task:
+					# Found a task in a previous iteration, return its status (cascade it forward)
+					task_status = prev_iter_task.get("status", "Open")
+					status_map = {
+						"Open": "Not Started",
+						"Working": "In Progress",
+						"Completed": "Completed",
+						"Cancelled": "Cancelled",
+						"Overdue": "Overdue",
+					}
+					mapped_status = status_map.get(task_status, task_status)
+					# Return the cascaded status (no iteration number in "Show All Iterations" view)
+					# IMPORTANT: Always cascade the status, even if it's "Cancelled" or other statuses
+					return mapped_status
+
+			# No task found in any previous iteration
+			# This means the stage was never attempted in any previous iteration
+			# Check if previous stage exists in this iteration to determine if it's blocked
+			if stage_index > 0 and self.task_sequence:
+				prev_stage_item = self.task_sequence[stage_index - 1]
+				# Handle both string and dict formats (backward compatibility)
+				if isinstance(prev_stage_item, dict):
+					prev_stage_name = prev_stage_item["subject"]
+				else:
+					prev_stage_name = prev_stage_item
+
+				# Check if previous stage exists in this iteration
+				prev_stage_exists = any(self.is_stage_task(t, prev_stage_name) for t in part_tasks)
+
+				if not prev_stage_exists:
+					return "Not Started"
+				else:
+					# Check if blocked by dependencies
+					blocked_status = self.check_if_blocked(part_tasks, stage_index, iteration_number)
+					return blocked_status
+			else:
+				return "Not Started"
+
+		# Check if task is blocked (use all_part_tasks to check dependencies across iterations if needed)
+		# For "Show All Iterations" view, we check dependencies within the same iteration
+		if self.is_task_blocked(iteration_task, all_part_tasks):
+			return "Blocked"
+
+		# Return status based on task status
+		task_status = iteration_task.get("status", "Open")
+		status_map = {
+			"Open": "Not Started",
+			"Working": "In Progress",
+			"Completed": "Completed",
+			"Cancelled": "Cancelled",
+			"Overdue": "Overdue",
+		}
+
+		return status_map.get(task_status, task_status)
 
 	def is_stage_task(self, task, stage_name):
 		"""Check if a task belongs to a specific stage."""
@@ -246,8 +541,12 @@ class PartStageMatrix:
 		# Check if previous stage is completed in this iteration
 		if not self.task_sequence or stage_index < 1:
 			return "Not Started"
-		prev_stage_info = self.task_sequence[stage_index - 1]
-		prev_stage_name = prev_stage_info["subject"]
+		prev_stage_item = self.task_sequence[stage_index - 1]
+		# Handle both string and dict formats (backward compatibility)
+		if isinstance(prev_stage_item, dict):
+			prev_stage_name = prev_stage_item["subject"]
+		else:
+			prev_stage_name = prev_stage_item
 		prev_stage_task = None
 
 		for t in part_tasks:
