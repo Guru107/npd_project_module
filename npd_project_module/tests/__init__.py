@@ -1,6 +1,8 @@
 # Copyright (c) 2025, Guru107 and contributors
 # For license information, please see license.txt
 
+"""
+
 from functools import partial
 
 import frappe
@@ -111,4 +113,7 @@ def add_company_to_fiscal_year(company_name):
 		doc.save(ignore_permissions=True)
 
 
-global_test_dependencies = ["User", "Company", "Item", "Project Template"]
+# Warehouse Type must come before Company because Company.on_update() creates
+# default warehouses that reference Warehouse Type "Transit"
+"""
+global_test_dependencies = ["Warehouse Type", "User", "Company", "Item", "Project Template"]
