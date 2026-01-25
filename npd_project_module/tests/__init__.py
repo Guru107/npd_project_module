@@ -18,7 +18,11 @@ test_records = [
 	{
 		"doctype": "Warehouse",
 		"name": "Stores"
+	},
+	{
+		"doctype": "Item Group",
+		"name": "Products"
 	}
 ]
-EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","UOM","Warehouse","Company", "User","Item","Project Template"]
+EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","UOM","Item Group","Warehouse","Company", "User","Item","Project Template"]
 
