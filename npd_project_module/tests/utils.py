@@ -16,6 +16,15 @@ def ensure_test_fixtures():
 	Ensure required test fixtures exist for creating Items and Projects.
 	Creates Item Group, UOM, and Company if they don't exist.
 	"""
+	# Ensure root Item Group "All Item Groups" exists first
+	if not frappe.db.exists("Item Group", "All Item Groups"):
+		root_item_group = frappe.get_doc({
+			"doctype": "Item Group",
+			"item_group_name": "All Item Groups",
+			"is_group": 1,
+		})
+		root_item_group.insert(ignore_permissions=True)
+
 	# Ensure Item Group "Products" exists
 	if not frappe.db.exists("Item Group", "Products"):
 		item_group = frappe.get_doc({
