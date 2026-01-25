@@ -24,5 +24,5 @@ test_records = [
 		"name": "Products"
 	}
 ]
-EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","UOM","Item Group","Warehouse","Company", "User","Item","Project Template"]
+EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","UOM","Warehouse", "Item Group","Company", "User","Item","Project Template"]
 
