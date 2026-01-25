@@ -12,5 +12,5 @@ test_records = [
         "name": "Transit"
     }
 ]
+EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","Company", "User","Item","Project Template"]
 
-global_test_dependencies = ["Warehouse Type", "User", "Company", "Item", "Project Template"]
