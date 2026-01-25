@@ -36,10 +36,6 @@ def make_test_item(item_code, item_name=None, **kwargs):
 		"include_item_in_manufacturing": kwargs.get("include_item_in_manufacturing", 0),
 	}
 
-	# Add HSN code if available
-	existing_hsn = frappe.get_all("GST HSN Code", limit=1, fields=["name"])
-	if existing_hsn:
-		item_data["gst_hsn_code"] = existing_hsn[0]["name"]
 
 	# Override with any provided kwargs
 	item_data.update(kwargs)
