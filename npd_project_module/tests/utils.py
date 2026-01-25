@@ -6,8 +6,8 @@ Test utilities and fixtures for NPD Project Module tests.
 """
 
 import frappe
-
 from frappe.utils import nowdate
+
 from npd_project_module.tests.compat import IntegrationTestCase
 
 

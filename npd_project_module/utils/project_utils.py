@@ -208,7 +208,6 @@ def _handle_part_removal(project_name, current_part_numbers):
 	for part_number in removed_parts:
 		# Delete tasks for this part
 		delete_tasks_for_part(project_name=project_name, part_number=part_number)
-
 		# Clear project reference from Item
 		frappe.db.set_value("Item", part_number, "project", None)
 

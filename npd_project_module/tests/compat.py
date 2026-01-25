@@ -9,6 +9,7 @@ Handles differences between versions.
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+
 # Check Frappe version
 def get_frappe_version():
 	"""Get Frappe version as tuple (major, minor, patch)."""
@@ -18,6 +19,7 @@ def get_frappe_version():
 		return (int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
 	except (ValueError, IndexError):
 		return (0, 0, 0)
+
 
 # In Frappe v15, IntegrationTestCase doesn't exist, use FrappeTestCase
 # In Frappe v16+, IntegrationTestCase might exist

@@ -7,10 +7,10 @@ Unit tests for Part Stage Matrix report.
 
 import frappe
 
-from npd_project_module.tests.compat import IntegrationTestCase
 from npd_project_module.npd_project_module.report.part_stage_matrix.part_stage_matrix import (
 	PartStageMatrix,
 )
+from npd_project_module.tests.compat import IntegrationTestCase
 from npd_project_module.tests.utils import (
 	NPDProjectModuleTestSuite,
 	cleanup_test_data,
@@ -226,9 +226,13 @@ class TestPartStageMatrix(NPDProjectModuleTestSuite):
 
 		# Verify column structure is different
 		part_code = test_item.item_code
-		default_columns = [col for col in matrix_default.columns if f"part_{part_code}" in col.get("fieldname", "")]
+		default_columns = [
+			col for col in matrix_default.columns if f"part_{part_code}" in col.get("fieldname", "")
+		]
 		all_iter_columns = [
-			col for col in matrix_all.columns if col.get("fieldname", "").startswith(f"part_{part_code}_iter_")
+			col
+			for col in matrix_all.columns
+			if col.get("fieldname", "").startswith(f"part_{part_code}_iter_")
 		]
 
 		# Default view should have one column per part
@@ -276,7 +280,10 @@ class TestPartStageMatrix(NPDProjectModuleTestSuite):
 			rfq_task_doc = None
 			for t in tasks:
 				task_doc = frappe.get_doc("Task", t["name"])
-				if getattr(task_doc, "stage_type", None) == "RFQ Data" and getattr(task_doc, "iteration_number", None) == 0:
+				if (
+					getattr(task_doc, "stage_type", None) == "RFQ Data"
+					and getattr(task_doc, "iteration_number", None) == 0
+				):
 					rfq_task_doc = task_doc
 					break
 			rfq_task_doc.status = "Completed"
@@ -357,7 +364,9 @@ class TestPartStageMatrix(NPDProjectModuleTestSuite):
 					# only if there is no task in iteration 1 for this stage, the status should cascade from iteration 0
 					iter_1_status = row.get(f"part_{test_item.item_code}_iter_1")
 					self.assertEqual(iter_0_status, "Completed", "Iteration 0 should show Completed")
-					self.assertEqual(iter_1_status, "Completed", "Iteration 1 should cascade Completed status")
+					self.assertEqual(
+						iter_1_status, "Completed", "Iteration 1 should cascade Completed status"
+					)
 					return  # Found the row, exit
 
 			# If we get here, the row wasn't found
@@ -422,4 +431,6 @@ class TestPartStageMatrix(NPDProjectModuleTestSuite):
 			iter_0_status = rfq_row.get(f"part_{test_item.item_code}_iter_0")
 			iter_1_status = rfq_row.get(f"part_{test_item.item_code}_iter_1")
 			self.assertEqual(iter_0_status, "Completed", "RFQ Data in iteration 0 should be Completed")
-			self.assertEqual(iter_1_status, "Completed", "RFQ Data in iteration 1 should cascade from iteration 0")
+			self.assertEqual(
+				iter_1_status, "Completed", "RFQ Data in iteration 1 should cascade from iteration 0"
+			)
