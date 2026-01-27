@@ -69,15 +69,6 @@ def ensure_test_fixtures():
 			"name": "Transit"
 		})
 		warehouse_type.insert(ignore_permissions=True)
-		# add warehouse "All Warehouses"
-	if not frappe.db.exists("Warehouse", "All Warehouses"):
-		warehouse = frappe.get_doc({
-			"doctype": "Warehouse",
-			"warehouse_name": "All Warehouses",
-			"is_group": 1,
-			"company": "_Test Company",
-		})
-		warehouse.insert(ignore_permissions=True)
 
 	# add warehouse "Stores"
 	if not frappe.db.exists("Warehouse", "Stores"):
