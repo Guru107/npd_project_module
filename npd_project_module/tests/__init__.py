@@ -4,25 +4,23 @@
 """
 Test dependencies declaration
 """
+
 import frappe
 
 test_records = [
-    {
-        "doctype": "Warehouse Type",
-        "name": "Transit"
-    },
-	{
-		"doctype": "UOM",
-		"name": "Nos"
-	},
-	{
-		"doctype": "Warehouse",
-		"name": "Stores"
-	},
-	{
-		"doctype": "Item Group",
-		"name": "Products"
-	}
+	{"doctype": "Warehouse Type", "name": "Transit"},
+	{"doctype": "UOM", "name": "Nos"},
+	{"doctype": "Warehouse", "name": "Stores"},
+	{"doctype": "Item Group", "name": "All Item Groups", "is_group": 1},
+	{"doctype": "Item Group", "name": "Products"},
 ]
-EXTRA_TEST_RECORD_DEPENDENCIES = ["Warehouse Type","UOM","Warehouse", "Item Group","Company", "User","Item","Project Template"]
-
+EXTRA_TEST_RECORD_DEPENDENCIES = [
+	"Warehouse Type",
+	"UOM",
+	"Warehouse",
+	"Item Group",
+	"Company",
+	"User",
+	"Item",
+	"Project Template",
+]

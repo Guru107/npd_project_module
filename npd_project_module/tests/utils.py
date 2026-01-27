@@ -18,40 +18,48 @@ def ensure_test_fixtures():
 	"""
 	# Ensure root Item Group "All Item Groups" exists first
 	if not frappe.db.exists("Item Group", "All Item Groups"):
-		root_item_group = frappe.get_doc({
-			"doctype": "Item Group",
-			"item_group_name": "All Item Groups",
-			"is_group": 1,
-		})
+		root_item_group = frappe.get_doc(
+			{
+				"doctype": "Item Group",
+				"item_group_name": "All Item Groups",
+				"is_group": 1,
+			}
+		)
 		root_item_group.insert(ignore_permissions=True)
 
 	# Ensure Item Group "Products" exists
 	if not frappe.db.exists("Item Group", "Products"):
-		item_group = frappe.get_doc({
-			"doctype": "Item Group",
-			"item_group_name": "Products",
-			"parent_item_group": "All Item Groups",
-			"is_group": 0,
-		})
+		item_group = frappe.get_doc(
+			{
+				"doctype": "Item Group",
+				"item_group_name": "Products",
+				"parent_item_group": "All Item Groups",
+				"is_group": 0,
+			}
+		)
 		item_group.insert(ignore_permissions=True)
 
 	# Ensure UOM "Nos" exists
 	if not frappe.db.exists("UOM", "Nos"):
-		uom = frappe.get_doc({
-			"doctype": "UOM",
-			"uom_name": "Nos",
-		})
+		uom = frappe.get_doc(
+			{
+				"doctype": "UOM",
+				"uom_name": "Nos",
+			}
+		)
 		uom.insert(ignore_permissions=True)
 
 	# Ensure "_Test Company" exists
 	if not frappe.db.exists("Company", "_Test Company"):
-		company = frappe.get_doc({
-			"doctype": "Company",
-			"company_name": "_Test Company",
-			"abbr": "_TC",
-			"country": "India",
-			"default_currency": "INR",
-		})
+		company = frappe.get_doc(
+			{
+				"doctype": "Company",
+				"company_name": "_Test Company",
+				"abbr": "_TC",
+				"country": "India",
+				"default_currency": "INR",
+			}
+		)
 		company.insert(ignore_permissions=True)
 
 	frappe.db.commit()
