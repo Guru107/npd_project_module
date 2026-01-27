@@ -75,6 +75,7 @@ def ensure_test_fixtures():
 			"doctype": "Warehouse",
 			"warehouse_name": "All Warehouses",
 			"is_group": 1,
+			"company": "_Test Company",
 		})
 		warehouse.insert(ignore_permissions=True)
 
@@ -84,6 +85,7 @@ def ensure_test_fixtures():
 			"doctype": "Warehouse",
 			"warehouse_name": "Stores",
 			"parent_warehouse": "All Warehouses",
+			"company": "_Test Company",
 		})
 		warehouse.insert(ignore_permissions=True)
 
@@ -93,6 +95,7 @@ def ensure_test_fixtures():
 			"doctype": "Warehouse",
 			"warehouse_name": "Work In Progress",
 			"parent_warehouse": "All Warehouses",
+			"company": "_Test Company",
 		})
 		warehouse.insert(ignore_permissions=True)
 
@@ -102,6 +105,7 @@ def ensure_test_fixtures():
 			"doctype": "Warehouse",
 			"warehouse_name": "Finished Goods",
 			"parent_warehouse": "All Warehouses",
+			"company": "_Test Company",
 		})
 		warehouse.insert(ignore_permissions=True)
 
@@ -112,6 +116,7 @@ def ensure_test_fixtures():
 			"warehouse_name": "Goods In Transit",
 			"warehouse_type": "Transit",
 			"parent_warehouse": "All Warehouses",
+			"company": "_Test Company",
 		})
 		warehouse.insert(ignore_permissions=True)
 
