@@ -140,7 +140,7 @@ def make_test_item(item_code, item_name=None, **kwargs):
 	item_data = {
 		"doctype": "Item",
 		"item_code": item_code,
-		"item_name": item_name or item_code,
+		"item_name": item_code,
 		"item_group": kwargs.get("item_group", "Products"),
 		"stock_uom": kwargs.get("stock_uom", "Nos"),
 		"is_stock_item": kwargs.get("is_stock_item", 0),
