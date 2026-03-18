@@ -158,7 +158,7 @@ before_uninstall = "npd_project_module.uninstall.before_uninstall.before_uninsta
 # Testing
 # -------
 
-# before_tests = "npd_project_module.install.before_tests"
+before_tests = "npd_project_module.utils.test_setup.before_tests"
 
 # Extend DocType Class
 # ------------------------------

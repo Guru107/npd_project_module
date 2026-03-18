@@ -233,8 +233,8 @@ def create_npd_template():
 	task_names = [
 		"RFQ Data",
 		"Internal Team Technical Feasibility",
-		"Supplier Quote & Tooling Sequence",
 		"Technical Sign Off",
+		"Supplier Quote & Tooling Sequence",
 		"Commercial with M&M",
 		"VOB or LOBA",
 		"TKO Data",
