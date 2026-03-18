@@ -30,6 +30,13 @@ This release includes bug fixes and improvements to make the NPD Project Module 
 - **Style: Fix ruff formatting in test_setup.py** (`8d7f3f2`)
 - **Lint changes** (`78589e5`)
 
+### Maintenance
+
+- **Chore: Remove claude workflows and add AGENT.md** (`3d78e06`)
+  - Removed claude-code-review.yml workflow
+  - Removed claude.yml workflow
+  - Added AGENT.md placeholder file
+
 ### Feature Updates
 
 - **Sequence change in NPD Template** (`9a6c9f6`)
