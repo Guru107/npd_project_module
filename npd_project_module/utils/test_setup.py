@@ -15,9 +15,7 @@ from erpnext.setup.utils import before_tests as erpnext_before_tests
 def _warehouse_exists() -> bool:
 	"""Check if any All Warehouses root warehouse exists (with or without company suffix)."""
 	# ERPNext creates warehouses with company suffix, e.g., "All Warehouses - _TC"
-	exists = frappe.get_all(
-		"Warehouse", filters={"name": ("like", "All Warehouses%")}, limit=1
-	)
+	exists = frappe.get_all("Warehouse", filters={"name": ("like", "All Warehouses%")}, limit=1)
 	return bool(exists)
 
 
