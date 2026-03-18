@@ -64,53 +64,57 @@ def ensure_test_fixtures():
 
 	# add warehouse type "Transit"
 	if not frappe.db.exists("Warehouse Type", "Transit"):
-		warehouse_type = frappe.get_doc({
-			"doctype": "Warehouse Type",
-			"name": "Transit"
-		})
+		warehouse_type = frappe.get_doc({"doctype": "Warehouse Type", "name": "Transit"})
 		warehouse_type.insert(ignore_permissions=True)
 
 	# add warehouse "Stores"
 	if not frappe.db.exists("Warehouse", "Stores"):
-		warehouse = frappe.get_doc({
-			"doctype": "Warehouse",
-			"warehouse_name": "Stores",
-			"parent_warehouse": "All Warehouses",
-			"company": "_Test Company",
-		})
+		warehouse = frappe.get_doc(
+			{
+				"doctype": "Warehouse",
+				"warehouse_name": "Stores",
+				"parent_warehouse": "All Warehouses",
+				"company": "_Test Company",
+			}
+		)
 		warehouse.insert(ignore_permissions=True)
 
 	# add warehouse "Work In Progress"
 	if not frappe.db.exists("Warehouse", "Work In Progress"):
-		warehouse = frappe.get_doc({
-			"doctype": "Warehouse",
-			"warehouse_name": "Work In Progress",
-			"parent_warehouse": "All Warehouses",
-			"company": "_Test Company",
-		})
+		warehouse = frappe.get_doc(
+			{
+				"doctype": "Warehouse",
+				"warehouse_name": "Work In Progress",
+				"parent_warehouse": "All Warehouses",
+				"company": "_Test Company",
+			}
+		)
 		warehouse.insert(ignore_permissions=True)
 
 	# add warehouse "Finished Goods"
 	if not frappe.db.exists("Warehouse", "Finished Goods"):
-		warehouse = frappe.get_doc({
-			"doctype": "Warehouse",
-			"warehouse_name": "Finished Goods",
-			"parent_warehouse": "All Warehouses",
-			"company": "_Test Company",
-		})
+		warehouse = frappe.get_doc(
+			{
+				"doctype": "Warehouse",
+				"warehouse_name": "Finished Goods",
+				"parent_warehouse": "All Warehouses",
+				"company": "_Test Company",
+			}
+		)
 		warehouse.insert(ignore_permissions=True)
 
 	# add warehouse "Goods In Transit"
 	if not frappe.db.exists("Warehouse", "Goods In Transit"):
-		warehouse = frappe.get_doc({
-			"doctype": "Warehouse",
-			"warehouse_name": "Goods In Transit",
-			"warehouse_type": "Transit",
-			"parent_warehouse": "All Warehouses",
-			"company": "_Test Company",
-		})
+		warehouse = frappe.get_doc(
+			{
+				"doctype": "Warehouse",
+				"warehouse_name": "Goods In Transit",
+				"warehouse_type": "Transit",
+				"parent_warehouse": "All Warehouses",
+				"company": "_Test Company",
+			}
+		)
 		warehouse.insert(ignore_permissions=True)
-
 
 	frappe.db.commit()
 
