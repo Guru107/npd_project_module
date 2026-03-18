@@ -67,50 +67,74 @@ def ensure_test_fixtures():
 		warehouse_type = frappe.get_doc({"doctype": "Warehouse Type", "name": "Transit"})
 		warehouse_type.insert(ignore_permissions=True)
 
+	# Helper to get warehouse name with optional company suffix
+	def _get_warehouse_name(base_name):
+		result = frappe.get_all("Warehouse", filters={"name": ("like", f"{base_name}%")}, limit=1)
+		return result[0].name if result else base_name
+
+	# Get the actual All Warehouses warehouse name (ERPNext may create with company suffix)
+	all_warehouses = _get_warehouse_name("All Warehouses")
+
+	# Ensure root warehouse "All Warehouses" exists first
+	if not frappe.db.exists("Warehouse", all_warehouses):
+		root_warehouse = frappe.get_doc(
+			{
+				"doctype": "Warehouse",
+				"warehouse_name": "All Warehouses",
+				"is_group": 1,
+			}
+		)
+		root_warehouse.insert(ignore_permissions=True)
+		all_warehouses = root_warehouse.name
+
 	# add warehouse "Stores"
-	if not frappe.db.exists("Warehouse", "Stores"):
+	stores_name = _get_warehouse_name("Stores")
+	if not frappe.db.exists("Warehouse", stores_name):
 		warehouse = frappe.get_doc(
 			{
 				"doctype": "Warehouse",
 				"warehouse_name": "Stores",
-				"parent_warehouse": "All Warehouses",
+				"parent_warehouse": all_warehouses,
 				"company": "_Test Company",
 			}
 		)
 		warehouse.insert(ignore_permissions=True)
 
 	# add warehouse "Work In Progress"
-	if not frappe.db.exists("Warehouse", "Work In Progress"):
+	wip_name = _get_warehouse_name("Work In Progress")
+	if not frappe.db.exists("Warehouse", wip_name):
 		warehouse = frappe.get_doc(
 			{
 				"doctype": "Warehouse",
 				"warehouse_name": "Work In Progress",
-				"parent_warehouse": "All Warehouses",
+				"parent_warehouse": all_warehouses,
 				"company": "_Test Company",
 			}
 		)
 		warehouse.insert(ignore_permissions=True)
 
 	# add warehouse "Finished Goods"
-	if not frappe.db.exists("Warehouse", "Finished Goods"):
+	fg_name = _get_warehouse_name("Finished Goods")
+	if not frappe.db.exists("Warehouse", fg_name):
 		warehouse = frappe.get_doc(
 			{
 				"doctype": "Warehouse",
 				"warehouse_name": "Finished Goods",
-				"parent_warehouse": "All Warehouses",
+				"parent_warehouse": all_warehouses,
 				"company": "_Test Company",
 			}
 		)
 		warehouse.insert(ignore_permissions=True)
 
 	# add warehouse "Goods In Transit"
-	if not frappe.db.exists("Warehouse", "Goods In Transit"):
+	git_name = _get_warehouse_name("Goods In Transit")
+	if not frappe.db.exists("Warehouse", git_name):
 		warehouse = frappe.get_doc(
 			{
 				"doctype": "Warehouse",
 				"warehouse_name": "Goods In Transit",
 				"warehouse_type": "Transit",
-				"parent_warehouse": "All Warehouses",
+				"parent_warehouse": all_warehouses,
 				"company": "_Test Company",
 			}
 		)

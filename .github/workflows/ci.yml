@@ -113,6 +113,7 @@ jobs:
           bench --site test_site install-app erpnext
           bench --site test_site install-app npd_project_module
           bench build
+          bench --site test_site execute erpnext.setup.setup_wizard.operations.install_fixtures.install --args '["India"]'
         env:
           CI: 'Yes'
 
