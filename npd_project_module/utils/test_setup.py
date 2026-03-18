@@ -44,4 +44,4 @@ def before_tests() -> None:
 		frappe.db.set_single_value("Global Defaults", "default_company", company)
 		frappe.defaults.set_user_default("company", company)
 
-	frappe.db.commit()
+	frappe.db.commit()  # nosemgrep: Required to persist test fixtures before tests run
