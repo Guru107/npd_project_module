@@ -14,7 +14,7 @@ Entry helper skipping gracefully if the site lacks the accounting fixtures.
 """
 
 import frappe
-from frappe.utils import add_days, today
+from frappe.utils import add_days, getdate, today
 
 from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import (
 	compute_recovered,
@@ -143,6 +143,118 @@ class TestNPDTooling(NPDProjectModuleTestSuite):
 			frappe.delete_doc("Payment Entry", name, force=True, ignore_permissions=True)
 		except Exception:
 			pass
+
+	def _cancel_delete(self, doctype, name):
+		try:
+			doc = frappe.get_doc(doctype, name)
+			if doc.docstatus == 1:
+				doc.cancel()
+			frappe.delete_doc(doctype, name, force=True, ignore_permissions=True)
+		except Exception:
+			pass
+
+	def _ensure_fiscal_year(self, company, date):
+		"""Make sure the company has an active Fiscal Year for `date` so GL postings submit."""
+		covering = frappe.get_all(
+			"Fiscal Year",
+			filters={"year_start_date": ["<=", date], "year_end_date": [">=", date]},
+			fields=["name"],
+		)
+		for fy in covering:
+			doc = frappe.get_doc("Fiscal Year", fy.name)
+			companies = [c.company for c in doc.companies]
+			if not companies or company in companies:
+				return  # a global FY, or one already active for this company
+		if covering:
+			# A covering FY exists but is restricted to other companies — add ours.
+			doc = frappe.get_doc("Fiscal Year", covering[0].name)
+			doc.append("companies", {"company": company})
+			doc.save(ignore_permissions=True)
+			frappe.db.commit()
+			return
+		year = getdate(date).year
+		frappe.get_doc(
+			{
+				"doctype": "Fiscal Year",
+				"year": f"NPD Test {year}",
+				"year_start_date": f"{year}-01-01",
+				"year_end_date": f"{year}-12-31",
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.commit()
+
+	def _make_sales_invoice(self, customer, company, item_code, rate):
+		"""Create and submit a Sales Invoice; skip gracefully if fixtures are missing."""
+		self._ensure_fiscal_year(company, today())
+		income = frappe.db.get_value("Company", company, "default_income_account")
+		cost_center = frappe.db.get_value("Company", company, "cost_center")
+		if not (income and cost_center):
+			self.skipTest("Company income account / cost center not configured for Sales Invoice test")
+		try:
+			si = frappe.get_doc(
+				{
+					"doctype": "Sales Invoice",
+					"customer": customer,
+					"company": company,
+					"posting_date": today(),
+					"due_date": today(),
+					"update_stock": 0,
+					"items": [
+						{
+							"item_code": item_code,
+							"qty": 1,
+							"rate": rate,
+							"income_account": income,
+							"cost_center": cost_center,
+						}
+					],
+				}
+			)
+			si.insert(ignore_permissions=True)
+			si.submit()
+		except Exception as e:
+			self.skipTest(f"Sales Invoice could not be submitted in this environment: {e}")
+		self.addCleanup(self._cancel_delete, "Sales Invoice", si.name)
+		return si.name
+
+	def _pay_invoice(self, customer, company, amount, invoice):
+		"""Create and submit a customer Payment Entry allocated against a Sales Invoice."""
+		self._ensure_fiscal_year(company, today())
+		receivable = frappe.db.get_value("Company", company, "default_receivable_account")
+		paid_to = frappe.db.get_value("Company", company, "default_cash_account") or frappe.db.get_value(
+			"Company", company, "default_bank_account"
+		)
+		if not (receivable and paid_to):
+			self.skipTest("Company default receivable/cash accounts not configured for Payment Entry test")
+		try:
+			pe = frappe.get_doc(
+				{
+					"doctype": "Payment Entry",
+					"payment_type": "Receive",
+					"party_type": "Customer",
+					"party": customer,
+					"company": company,
+					"paid_from": receivable,
+					"paid_to": paid_to,
+					"paid_amount": amount,
+					"received_amount": amount,
+					"reference_no": "REC-TEST",
+					"reference_date": today(),
+					"references": [
+						{
+							"reference_doctype": "Sales Invoice",
+							"reference_name": invoice,
+							"allocated_amount": amount,
+						}
+					],
+				}
+			)
+			pe.insert(ignore_permissions=True)
+			pe.submit()
+		except Exception as e:
+			self.skipTest(f"Payment Entry against invoice could not be submitted: {e}")
+		self.addCleanup(self._cancel_delete, "Payment Entry", pe.name)
+		return pe.name
 
 	def test_create_tooling_order(self):
 		"""An order persists with its naming series and one tool line."""
@@ -290,6 +402,65 @@ class TestNPDTooling(NPDProjectModuleTestSuite):
 		self.assertEqual(doc.outstanding_amount, 600)
 		self.assertEqual(doc.recovery_status, "Partially Recovered")
 		self.assertEqual(doc.payments[0].paid_amount, 1500)  # full receipt captured for reference
+
+	def _make_invoiced_order(self, company, customer, rate=1000):
+		"""Create a tooling order with one tool, plus a submitted Sales Invoice for it."""
+		part = make_test_item("_Test Tooling Part")
+		tool = make_test_item("_Test Tool Item", item_group="Tooling")
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_items.extend([part, tool])
+		self.test_projects.append(project.project_name)
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer": customer,
+				"customer_po_no": "PO-INV-001",
+				"tools": [{"part_number": part.item_code, "tool_item": tool.item_code, "qty": 1, "rate": rate}],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+		si = self._make_sales_invoice(customer, company, tool.item_code, rate)
+		return doc, si
+
+	def test_recovery_from_invoice_payment(self):
+		"""Recovery derives from invoice outstanding: nothing until paid, full once paid."""
+		company = self._company()
+		customer = self._make_customer()
+		doc, si = self._make_invoiced_order(company, customer)
+
+		doc.append("invoices", {"sales_invoice": si})
+		doc.save(ignore_permissions=True)
+		doc.reload()
+		grand_total = frappe.db.get_value("Sales Invoice", si, "grand_total")
+		# Invoice raised but unpaid — nothing recovered yet.
+		self.assertEqual(doc.invoiced_amount, grand_total)
+		self.assertEqual(doc.amount_recovered, 0)
+		self.assertEqual(doc.recovery_status, "Pending")
+
+		# Customer pays the invoice in full; recovery is derived automatically.
+		self._pay_invoice(customer, company, grand_total, si)
+		doc.reload()
+		self.assertEqual(doc.amount_recovered, grand_total)
+		self.assertEqual(doc.recovery_status, "Fully Recovered")
+
+	def test_no_double_count_invoice_and_advance(self):
+		"""A Payment Entry applied to a linked invoice is not counted twice via the payments table."""
+		company = self._company()
+		customer = self._make_customer()
+		doc, si = self._make_invoiced_order(company, customer)
+		grand_total = frappe.db.get_value("Sales Invoice", si, "grand_total")
+
+		pe = self._pay_invoice(customer, company, grand_total, si)
+		# Link BOTH the invoice and the same payment (allocated fully) to the order.
+		doc.append("invoices", {"sales_invoice": si})
+		doc.append("payments", {"payment_entry": pe, "allocated_amount": grand_total})
+		doc.save(ignore_permissions=True)
+		doc.reload()
+
+		# Counted once (via the invoice), not doubled.
+		self.assertEqual(doc.amount_recovered, grand_total)
+		self.assertEqual(doc.recovery_status, "Fully Recovered")
 
 	def test_report_lists_each_tool(self):
 		"""The Tooling Recovery Register emits one row per tool with order-level context."""
