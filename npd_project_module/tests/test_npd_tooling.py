@@ -416,7 +416,9 @@ class TestNPDTooling(NPDProjectModuleTestSuite):
 				"project": project.name,
 				"customer": customer,
 				"customer_po_no": "PO-INV-001",
-				"tools": [{"part_number": part.item_code, "tool_item": tool.item_code, "qty": 1, "rate": rate}],
+				"tools": [
+					{"part_number": part.item_code, "tool_item": tool.item_code, "qty": 1, "rate": rate}
+				],
 			}
 		).insert(ignore_permissions=True)
 		self.test_tooling.append(doc.name)
