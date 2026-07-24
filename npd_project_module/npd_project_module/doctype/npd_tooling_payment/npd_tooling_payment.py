@@ -13,6 +13,7 @@ class NPDToolingPayment(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		allocated_amount: DF.Currency
 		paid_amount: DF.Currency
 		payment_entry: DF.Link
 		posting_date: DF.Date | None

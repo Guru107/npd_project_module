@@ -50,6 +50,23 @@ frappe.ui.form.on("NPD Tooling", {
 	},
 });
 
+// Default a payment's allocation to the full receipt; the user reduces it for bulk payments.
+frappe.ui.form.on("NPD Tooling Payment", {
+	payment_entry: function (frm, cdt, cdn) {
+		const row = locals[cdt][cdn];
+		if (!row.payment_entry) {
+			return;
+		}
+		frappe.db.get_value("Payment Entry", row.payment_entry, "paid_amount", function (r) {
+			const received = r ? flt(r.paid_amount) : 0;
+			frappe.model.set_value(cdt, cdn, "paid_amount", received);
+			if (!row.allocated_amount) {
+				frappe.model.set_value(cdt, cdn, "allocated_amount", received);
+			}
+		});
+	},
+});
+
 // Live amount = qty × rate on each tool line, and keep the order total in sync.
 frappe.ui.form.on("NPD Tooling Item", {
 	qty: function (frm, cdt, cdn) {

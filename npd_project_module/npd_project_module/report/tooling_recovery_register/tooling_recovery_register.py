@@ -184,9 +184,9 @@ def _compute_recovery(order_info):
 	Invoices, for reference). Outstanding = total tooling amount minus recovered.
 	"""
 	order_names = list(order_info.keys())
-	recovered_by_order = _sum_child_amounts(
-		"NPD Tooling Payment", order_names, "payment_entry", "Payment Entry", "paid_amount"
-	)
+	# Recovered = amounts allocated to each PO on its payment rows (handles bulk receipts
+	# split across POs). Invoiced = live grand totals of the linked Sales Invoices.
+	recovered_by_order = _sum_child_field("NPD Tooling Payment", order_names, "allocated_amount")
 	invoiced_by_order = _sum_child_amounts(
 		"NPD Tooling Invoice", order_names, "sales_invoice", "Sales Invoice", "grand_total"
 	)
@@ -202,6 +202,18 @@ def _compute_recovery(order_info):
 			"recovery_status": compute_recovery_status(target, recovered),
 		}
 	return recovery
+
+
+def _sum_child_field(child_doctype, order_names, amount_field):
+	"""Sum a numeric field stored directly on child rows, grouped by parent order."""
+	totals = dict.fromkeys(order_names, 0)
+	for row in frappe.get_all(
+		child_doctype,
+		filters={"parent": ["in", order_names], "parenttype": "NPD Tooling"},
+		fields=["parent", amount_field],
+	):
+		totals[row.parent] = totals.get(row.parent, 0) + flt(row.get(amount_field))
+	return totals
 
 
 def _sum_child_amounts(child_doctype, order_names, link_field, link_doctype, amount_field):

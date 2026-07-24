@@ -9,6 +9,7 @@
  "field_order": [
   "payment_entry",
   "paid_amount",
+  "allocated_amount",
   "posting_date",
   "reference_milestone"
  ],
@@ -29,8 +30,16 @@
    "fieldname": "paid_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Received Amount",
+   "label": "Received (Total)",
    "read_only": 1
+  },
+  {
+   "columns": 2,
+   "description": "Portion of this receipt applied to this tooling PO. Defaults to the full receipt; reduce it when a bulk payment is split across multiple POs.",
+   "fieldname": "allocated_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Allocated to this PO"
   },
   {
    "columns": 2,

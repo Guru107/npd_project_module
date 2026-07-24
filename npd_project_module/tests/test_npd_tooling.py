@@ -254,6 +254,39 @@ class TestNPDTooling(NPDProjectModuleTestSuite):
 		self.assertEqual(doc.outstanding_amount, 0)
 		self.assertEqual(doc.recovery_status, "Fully Recovered")
 
+	def test_bulk_payment_partial_allocation(self):
+		"""A bulk receipt spanning several POs counts only for the portion allocated here."""
+		company = self._company()
+		customer = self._make_customer()
+		part = make_test_item("_Test Tooling Part")
+		tool = make_test_item("_Test Tool Item", item_group="Tooling")
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_items.extend([part, tool])
+		self.test_projects.append(project.project_name)
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer": customer,
+				"customer_po_no": "PO-BULK-001",
+				"tools": [
+					{"part_number": part.item_code, "tool_item": tool.item_code, "qty": 1, "rate": 1000}
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+
+		# One ₹1500 receipt covers several POs; only ₹400 of it is for this order.
+		pe = self._make_payment_entry(customer, 1500, company)
+		doc.append("payments", {"payment_entry": pe, "allocated_amount": 400})
+		doc.save(ignore_permissions=True)
+		doc.reload()
+
+		self.assertEqual(doc.amount_recovered, 400)  # allocated slice, not the ₹1500 receipt
+		self.assertEqual(doc.outstanding_amount, 600)
+		self.assertEqual(doc.recovery_status, "Partially Recovered")
+		self.assertEqual(doc.payments[0].paid_amount, 1500)  # full receipt captured for reference
+
 	def test_report_lists_each_tool(self):
 		"""The Tooling Recovery Register emits one row per tool with order-level context."""
 		part_a = make_test_item("_Test Part A")

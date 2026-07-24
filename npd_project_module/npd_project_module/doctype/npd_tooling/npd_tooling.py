@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 from frappe.utils import date_diff, flt, getdate, today
 
@@ -29,6 +30,7 @@ class NPDTooling(Document):
 
 	def validate(self):
 		self._set_line_amounts_and_total()
+		self._set_payment_allocations()
 
 	def _set_line_amounts_and_total(self):
 		"""Compute each tool line amount (qty x rate) and the order total."""
@@ -37,6 +39,31 @@ class NPDTooling(Document):
 			row.amount = flt(row.qty) * flt(row.rate)
 			total += flt(row.amount)
 		self.total_tooling_amount = total
+
+	def _set_payment_allocations(self):
+		"""Default and sanity-check the amount allocated from each receipt to this PO.
+
+		The customer often pays in bulk against several POs, so a Payment Entry's full
+		amount is not necessarily for this order. Each row's `allocated_amount` is the slice
+		applied here; it defaults to the full receipt and must not exceed it.
+		"""
+		for row in self.payments:
+			if not row.payment_entry:
+				continue
+			received = flt(frappe.db.get_value("Payment Entry", row.payment_entry, "paid_amount"))
+			row.paid_amount = received
+			if not row.allocated_amount:
+				row.allocated_amount = received
+			elif flt(row.allocated_amount) > received + 0.01:
+				frappe.msgprint(
+					_("Payment {0}: allocated amount ({1}) exceeds the received amount ({2}).").format(
+						row.payment_entry,
+						frappe.format_value(row.allocated_amount, {"fieldtype": "Currency"}),
+						frappe.format_value(received, {"fieldtype": "Currency"}),
+					),
+					indicator="orange",
+					alert=True,
+				)
 
 	# --- Virtual fields (computed live, never stored) ---
 
@@ -54,7 +81,7 @@ class NPDTooling(Document):
 
 	@property
 	def amount_recovered(self):
-		"""Money actually received from the customer so far (linked Payment Entries)."""
+		"""Money received and allocated to this PO across linked payments."""
 		return self._get_recovered_total()
 
 	@property
@@ -68,16 +95,8 @@ class NPDTooling(Document):
 		return compute_recovery_status(self.total_tooling_amount, self._get_recovered_total())
 
 	def _get_recovered_total(self):
-		"""Sum of received amounts across linked Payment Entries (computed live)."""
-		payment_names = [row.payment_entry for row in self.payments if row.payment_entry]
-		if not payment_names:
-			return 0
-		rows = frappe.get_all(
-			"Payment Entry",
-			filters={"name": ["in", payment_names]},
-			fields=["paid_amount"],
-		)
-		return sum(flt(r.paid_amount) for r in rows)
+		"""Sum of amounts allocated to this PO across the payment rows."""
+		return sum(flt(row.allocated_amount) for row in self.payments)
 
 	def _get_invoiced_total(self):
 		"""Sum of grand totals across linked Sales Invoices (computed live)."""
