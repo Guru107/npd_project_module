@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-07-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "payment_entry",
+  "paid_amount",
+  "allocated_amount",
+  "posting_date",
+  "reference_milestone"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "description": "ERPNext Payment Entry recording money received from the customer (advance / milestone / final)",
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Payment Entry",
+   "options": "Payment Entry",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fetch_from": "payment_entry.paid_amount",
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Received (Total)",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "description": "Portion of this receipt applied to this tooling PO. Defaults to the full receipt; reduce it when a bulk payment is split across multiple POs.",
+   "fieldname": "allocated_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Allocated to this PO"
+  },
+  {
+   "columns": 2,
+   "fetch_from": "payment_entry.posting_date",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Posting Date",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "description": "Which payment milestone this receipt covers (e.g. '20% advance')",
+   "fieldname": "reference_milestone",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Milestone"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "NPD Project Module",
+ "name": "NPD Tooling Payment",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -9,7 +9,55 @@ Provides bootstrapping of site-local ERPNext test records for deterministic loca
 from __future__ import annotations
 
 import frappe
-from erpnext.setup.utils import before_tests as erpnext_before_tests
+
+
+def _run_erpnext_test_bootstrap() -> None:
+	"""Run ERPNext's standard test-record bootstrap, across ERPNext v15 and v16.
+
+	ERPNext v15 exposes ``erpnext.setup.utils.before_tests``; v16 removed it in favour
+	of the shared setup-wizard flow. Import lazily so the module loads on both versions.
+	"""
+	try:
+		from erpnext.setup.utils import before_tests as erpnext_before_tests
+
+		erpnext_before_tests()
+		return
+	except ImportError:
+		pass
+
+	# ERPNext v16: run the setup wizard directly, then apply test defaults if available.
+	from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
+	from frappe.utils.data import now_datetime
+
+	current_year = now_datetime().year
+	setup_complete(
+		{
+			"currency": "USD",
+			"full_name": "Test User",
+			"company_name": "Wind Power LLC",
+			"timezone": "America/New_York",
+			"company_abbr": "WP",
+			"industry": "Manufacturing",
+			"country": "United States",
+			"fy_start_date": f"{current_year}-01-01",
+			"fy_end_date": f"{current_year}-12-31",
+			"language": "english",
+			"company_tagline": "Testing",
+			"email": "test@erpnext.com",
+			"password": "test",
+			"chart_of_accounts": "Standard",
+		}
+	)
+
+	try:
+		from erpnext.setup.utils import enable_all_roles_and_domains, set_defaults_for_tests
+
+		enable_all_roles_and_domains()
+		set_defaults_for_tests()
+	except ImportError:
+		pass
+
+	frappe.db.commit()  # nosemgrep
 
 
 def _warehouse_exists() -> bool:
@@ -23,7 +71,7 @@ def before_tests() -> None:
 	"""Bootstrap site-local ERPNext test records for deterministic local/CI runs."""
 	# Run ERPNext's standard test fixtures setup
 	if not frappe.db.exists("Company", None):
-		erpnext_before_tests()
+		_run_erpnext_test_bootstrap()
 
 	# Ensure All Warehouses root exists (ERPNext may create with company suffix)
 	if not _warehouse_exists():

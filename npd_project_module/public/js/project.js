@@ -130,6 +130,28 @@ frappe.ui.form.on("Project", {
 							},
 							__("View Reports")
 						);
+
+						// Add button to view Tooling Recovery Register report
+						frm.add_custom_button(
+							__("Tooling Recovery Register"),
+							function () {
+								frappe.set_route("query-report", "Tooling Recovery Register", {
+									project: frm.doc.name,
+								});
+							},
+							__("View Reports")
+						);
+
+						// Add button to view/manage tooling for this project
+						frm.add_custom_button(
+							__("View Tooling"),
+							function () {
+								frappe.set_route("List", "NPD Tooling", {
+									project: frm.doc.name,
+								});
+							},
+							__("Actions")
+						);
 					}
 				}
 			}

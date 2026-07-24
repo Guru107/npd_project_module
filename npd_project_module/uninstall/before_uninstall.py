@@ -14,6 +14,7 @@ def before_uninstall():
 	remove_custom_fields()
 	remove_npd_template()
 	remove_custom_report()
+	remove_tooling_setup()
 	remove_custom_doctype()
 	frappe.db.commit()
 
@@ -28,6 +29,7 @@ def remove_custom_fields():
 	custom_fields_to_remove = [
 		{"dt": "Task", "fieldname": "part_number"},
 		{"dt": "Task", "fieldname": "iteration_number"},
+		{"dt": "Task", "fieldname": "stage_type"},
 		{"dt": "Project", "fieldname": "part_numbers_section"},
 		{"dt": "Project", "fieldname": "part_numbers"},
 		{"dt": "Item", "fieldname": "project"},
@@ -86,15 +88,41 @@ def remove_npd_template():
 
 def remove_custom_report():
 	"""
-	Remove the Part Stage Matrix report created by this module.
+	Remove the reports created by this module.
 	"""
-	report_name = "Part Stage Matrix"
+	reports_to_remove = ["Part Stage Matrix", "Tooling Recovery Register"]
+	for report_name in reports_to_remove:
+		try:
+			if frappe.db.exists("Report", report_name):
+				frappe.delete_doc(
+					"Report", report_name, force=True, ignore_permissions=True, ignore_missing=True
+				)
+				print(f"  ✓ Removed custom report: {report_name}")
+		except Exception as e:
+			print(f"  ✗ Error removing report {report_name}: {e!s}")
+
+
+def remove_tooling_setup():
+	"""
+	Remove supporting master data created for the NPD Tooling feature.
+
+	Only removes the "Tooling" Item Group when it has no Items assigned, so tool Items
+	created by users are never orphaned. The NPD Tooling doctype and its records are
+	removed automatically by Frappe when the app is uninstalled.
+	"""
+	item_group = "Tooling"
 	try:
-		if frappe.db.exists("Report", report_name):
-			frappe.delete_doc("Report", report_name, force=True, ignore_permissions=True, ignore_missing=True)
-			print(f"  ✓ Removed custom report: {report_name}")
+		if frappe.db.exists("Item Group", item_group):
+			items_in_group = frappe.db.count("Item", filters={"item_group": item_group})
+			if items_in_group:
+				print(f"  ⚠ Item Group '{item_group}' has {items_in_group} item(s); leaving it in place")
+			else:
+				frappe.delete_doc(
+					"Item Group", item_group, force=True, ignore_permissions=True, ignore_missing=True
+				)
+				print(f"  ✓ Removed Item Group: {item_group}")
 	except Exception as e:
-		print(f"  ✗ Error removing report {report_name}: {e!s}")
+		print(f"  ✗ Error removing Item Group {item_group}: {e!s}")
 
 
 def remove_custom_doctype():
