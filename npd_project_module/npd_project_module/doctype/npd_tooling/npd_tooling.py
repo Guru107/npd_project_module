@@ -95,20 +95,73 @@ class NPDTooling(Document):
 		return compute_recovery_status(self.total_tooling_amount, self._get_recovered_total())
 
 	def _get_recovered_total(self):
-		"""Sum of amounts allocated to this PO across the payment rows."""
-		return sum(flt(row.allocated_amount) for row in self.payments)
+		"""Money recovered against this PO.
+
+		Combines money paid against the linked Sales Invoices (ERPNext allocates bulk
+		receipts to specific invoices automatically) with manual advance allocations for
+		receipts not yet applied to those invoices.
+		"""
+		invoice_names = [row.sales_invoice for row in self.invoices if row.sales_invoice]
+		payment_allocations = [
+			(row.payment_entry, row.allocated_amount) for row in self.payments if row.payment_entry
+		]
+		invoice_figures = _get_invoice_figures(invoice_names)
+		on_invoice = _payments_applied_to_invoices([pe for pe, _amt in payment_allocations], invoice_names)
+		return compute_recovered(invoice_figures, payment_allocations, on_invoice)
 
 	def _get_invoiced_total(self):
-		"""Sum of grand totals across linked Sales Invoices (computed live)."""
-		invoice_names = [row.sales_invoice for row in self.invoices if row.sales_invoice]
-		if not invoice_names:
-			return 0
-		rows = frappe.get_all(
-			"Sales Invoice",
-			filters={"name": ["in", invoice_names]},
-			fields=["grand_total"],
-		)
-		return sum(flt(r.grand_total) for r in rows)
+		"""Sum of grand totals across linked Sales Invoices (billed reference, computed live)."""
+		return sum(flt(gt) for gt, _out in _get_invoice_figures(self._invoice_names()))
+
+	def _invoice_names(self):
+		return [row.sales_invoice for row in self.invoices if row.sales_invoice]
+
+
+def _get_invoice_figures(invoice_names):
+	"""Return [(grand_total, outstanding_amount), ...] for the given Sales Invoices."""
+	if not invoice_names:
+		return []
+	rows = frappe.get_all(
+		"Sales Invoice",
+		filters={"name": ["in", invoice_names]},
+		fields=["grand_total", "outstanding_amount"],
+	)
+	return [(r.grand_total, r.outstanding_amount) for r in rows]
+
+
+def _payments_applied_to_invoices(payment_entries, invoice_names):
+	"""Return the set of Payment Entries that are applied to any of the given Sales Invoices.
+
+	Money from these receipts is already reflected in the invoice outstanding, so it must
+	not be double-counted from the manual allocation rows.
+	"""
+	if not payment_entries or not invoice_names:
+		return set()
+	refs = frappe.get_all(
+		"Payment Entry Reference",
+		filters={
+			"parent": ["in", payment_entries],
+			"reference_doctype": "Sales Invoice",
+			"reference_name": ["in", invoice_names],
+		},
+		fields=["parent"],
+	)
+	return {r.parent for r in refs}
+
+
+def compute_recovered(invoice_figures, payment_allocations, payments_on_invoice):
+	"""Total money recovered against a tooling PO, double-count free.
+
+	invoice_figures: iterable of (grand_total, outstanding_amount) for the linked invoices —
+	        contributes the amount already paid (grand_total minus outstanding).
+	payment_allocations: iterable of (payment_entry, allocated_amount) manual rows.
+	payments_on_invoice: Payment Entries already applied to the linked invoices; their manual
+	        allocation is skipped because that money is counted through the invoice above.
+	"""
+	invoice_paid = sum(max(flt(gt) - flt(out), 0) for gt, out in invoice_figures)
+	on_invoice = set(payments_on_invoice or ())
+	advances = sum(flt(amt) for pe, amt in payment_allocations if pe not in on_invoice)
+	return invoice_paid + advances
 
 
 def compute_recovery_status(target, recovered):

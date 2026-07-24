@@ -5,17 +5,21 @@
 Unit tests for the NPD Tooling order doctype and Tooling Recovery Register report.
 
 An NPD Tooling record is a customer-PO tooling order with child tool lines (a part can
-need several tools, each possibly from a different supplier). Recovery is measured from
-money received (linked Payment Entries) versus the total tooling amount, so it counts
-even before a tax invoice is raised. Order totals, ageing, and payment-based recovery are
-tested end-to-end; the Payment Entry test skips gracefully if the site lacks the
-accounting fixtures to submit one.
+need several tools, each possibly from a different supplier). Recovery combines money paid
+against linked Sales Invoices with manual advance allocations (for receipts not yet on an
+invoice), versus the total tooling amount, so it counts even before a tax invoice exists
+and never double-counts. The double-count-free combination is unit-tested purely; order
+totals, ageing, and manual-allocation recovery are tested end-to-end, with the Payment
+Entry helper skipping gracefully if the site lacks the accounting fixtures.
 """
 
 import frappe
 from frappe.utils import add_days, today
 
-from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import compute_recovery_status
+from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import (
+	compute_recovered,
+	compute_recovery_status,
+)
 from npd_project_module.npd_project_module.report.tooling_recovery_register.tooling_recovery_register import (
 	execute as run_recovery_register,
 )
@@ -334,3 +338,31 @@ class TestRecoveryStatusLogic(NPDProjectModuleTestSuite):
 
 	def test_fully_recovered_within_rounding_tolerance(self):
 		self.assertEqual(compute_recovery_status(1000, 999.995), "Fully Recovered")
+
+
+class TestRecoveredComputation(NPDProjectModuleTestSuite):
+	"""Pure-logic tests for combining invoice payments with manual advance allocations."""
+
+	def test_advances_only_no_invoices(self):
+		# No invoices linked: recovered is the sum of manual allocations.
+		self.assertEqual(compute_recovered([], [("PE1", 400), ("PE2", 600)], set()), 1000)
+
+	def test_invoice_paid_only(self):
+		# Paid = grand_total - outstanding, summed over linked invoices.
+		self.assertEqual(compute_recovered([(1000, 600)], [], set()), 400)
+
+	def test_invoice_plus_standalone_advance(self):
+		# An advance not applied to any linked invoice adds on top of invoice payments.
+		self.assertEqual(compute_recovered([(1000, 600)], [("PE2", 200)], set()), 600)
+
+	def test_advance_applied_to_invoice_not_double_counted(self):
+		# PE1 is applied to the linked invoice (already in its outstanding), so its manual
+		# allocation is skipped — recovered stays 400, not 800.
+		self.assertEqual(compute_recovered([(1000, 600)], [("PE1", 400)], {"PE1"}), 400)
+
+	def test_invoice_fully_paid(self):
+		self.assertEqual(compute_recovered([(1000, 0)], [], set()), 1000)
+
+	def test_unpaid_invoice_contributes_zero(self):
+		# A fully-outstanding invoice means nothing has been recovered through it.
+		self.assertEqual(compute_recovered([(1000, 1000)], [], set()), 0)

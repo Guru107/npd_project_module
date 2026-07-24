@@ -14,7 +14,10 @@ import frappe
 from frappe import _
 from frappe.utils import date_diff, flt, getdate, today
 
-from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import compute_recovery_status
+from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import (
+	compute_recovered,
+	compute_recovery_status,
+)
 
 
 def execute(filters=None):
@@ -180,23 +183,33 @@ def get_data(filters):
 def _compute_recovery(order_info):
 	"""Return {order_name: {invoiced, recovered, outstanding, recovery_status}}.
 
-	Recovered = money received (linked Payment Entries). Invoiced = billed (linked Sales
-	Invoices, for reference). Outstanding = total tooling amount minus recovered.
+	Recovered mirrors the doctype controller: money paid against the linked Sales Invoices
+	(ERPNext handles bulk allocation) plus manual advance allocations not yet applied to
+	those invoices. Invoiced = billed grand totals (reference). Outstanding = total tooling
+	amount minus recovered.
 	"""
 	order_names = list(order_info.keys())
-	# Recovered = amounts allocated to each PO on its payment rows (handles bulk receipts
-	# split across POs). Invoiced = live grand totals of the linked Sales Invoices.
-	recovered_by_order = _sum_child_field("NPD Tooling Payment", order_names, "allocated_amount")
-	invoiced_by_order = _sum_child_amounts(
-		"NPD Tooling Invoice", order_names, "sales_invoice", "Sales Invoice", "grand_total"
-	)
+
+	# Linked invoices per order, with live figures.
+	order_invoices, si_figures = _linked_invoices(order_names)
+	# Linked manual payment allocations per order.
+	order_payments = _linked_payments(order_names)
+	# Which Payment Entries are applied to which of our linked invoices.
+	pe_to_invoices = _payment_references(order_payments, si_figures)
 
 	recovery = {}
 	for order_name, order in order_info.items():
-		recovered = recovered_by_order.get(order_name, 0)
+		sis = order_invoices.get(order_name, set())
+		invoice_figures = [si_figures[s] for s in sis if s in si_figures]
+		invoiced = sum(flt(gt) for gt, _out in invoice_figures)
+
+		payments = order_payments.get(order_name, [])
+		on_invoice = {pe for pe, _amt in payments if pe_to_invoices.get(pe, set()) & sis}
+
+		recovered = compute_recovered(invoice_figures, payments, on_invoice)
 		target = flt(order.total_tooling_amount)
 		recovery[order_name] = {
-			"invoiced": invoiced_by_order.get(order_name, 0),
+			"invoiced": invoiced,
 			"recovered": recovered,
 			"outstanding": max(target - flt(recovered), 0),
 			"recovery_status": compute_recovery_status(target, recovered),
@@ -204,42 +217,62 @@ def _compute_recovery(order_info):
 	return recovery
 
 
-def _sum_child_field(child_doctype, order_names, amount_field):
-	"""Sum a numeric field stored directly on child rows, grouped by parent order."""
-	totals = dict.fromkeys(order_names, 0)
-	for row in frappe.get_all(
-		child_doctype,
-		filters={"parent": ["in", order_names], "parenttype": "NPD Tooling"},
-		fields=["parent", amount_field],
-	):
-		totals[row.parent] = totals.get(row.parent, 0) + flt(row.get(amount_field))
-	return totals
-
-
-def _sum_child_amounts(child_doctype, order_names, link_field, link_doctype, amount_field):
-	"""Sum a live amount from documents referenced by a child table, grouped by parent order."""
+def _linked_invoices(order_names):
+	"""Return ({order: {sales_invoice}}, {sales_invoice: (grand_total, outstanding)})."""
 	links = frappe.get_all(
-		child_doctype,
+		"NPD Tooling Invoice",
 		filters={"parent": ["in", order_names], "parenttype": "NPD Tooling"},
-		fields=["parent", link_field],
+		fields=["parent", "sales_invoice"],
 	)
-	order_to_refs = {}
-	all_refs = set()
+	order_invoices = {}
+	all_si = set()
 	for link in links:
-		ref = link.get(link_field)
-		if not ref:
+		if not link.sales_invoice:
 			continue
-		order_to_refs.setdefault(link.parent, []).append(ref)
-		all_refs.add(ref)
+		order_invoices.setdefault(link.parent, set()).add(link.sales_invoice)
+		all_si.add(link.sales_invoice)
 
-	amount_map = {}
-	if all_refs:
-		for row in frappe.get_all(
-			link_doctype, filters={"name": ["in", list(all_refs)]}, fields=["name", amount_field]
+	si_figures = {}
+	if all_si:
+		for r in frappe.get_all(
+			"Sales Invoice",
+			filters={"name": ["in", list(all_si)]},
+			fields=["name", "grand_total", "outstanding_amount"],
 		):
-			amount_map[row.name] = flt(row.get(amount_field))
+			si_figures[r.name] = (r.grand_total, r.outstanding_amount)
+	return order_invoices, si_figures
 
-	totals = {}
-	for order_name in order_names:
-		totals[order_name] = sum(amount_map.get(ref, 0) for ref in order_to_refs.get(order_name, []))
-	return totals
+
+def _linked_payments(order_names):
+	"""Return {order: [(payment_entry, allocated_amount), ...]}."""
+	rows = frappe.get_all(
+		"NPD Tooling Payment",
+		filters={"parent": ["in", order_names], "parenttype": "NPD Tooling"},
+		fields=["parent", "payment_entry", "allocated_amount"],
+	)
+	order_payments = {}
+	for row in rows:
+		if not row.payment_entry:
+			continue
+		order_payments.setdefault(row.parent, []).append((row.payment_entry, row.allocated_amount))
+	return order_payments
+
+
+def _payment_references(order_payments, si_figures):
+	"""Return {payment_entry: {sales_invoice}} for our linked PEs against our linked invoices."""
+	all_pe = {pe for payments in order_payments.values() for pe, _amt in payments}
+	all_si = set(si_figures.keys())
+	if not all_pe or not all_si:
+		return {}
+	pe_to_invoices = {}
+	for r in frappe.get_all(
+		"Payment Entry Reference",
+		filters={
+			"parent": ["in", list(all_pe)],
+			"reference_doctype": "Sales Invoice",
+			"reference_name": ["in", list(all_si)],
+		},
+		fields=["parent", "reference_name"],
+	):
+		pe_to_invoices.setdefault(r.parent, set()).add(r.reference_name)
+	return pe_to_invoices
