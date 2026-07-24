@@ -1,0 +1,228 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-07-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "section_order",
+  "project",
+  "customer",
+  "col_break_order",
+  "customer_po_no",
+  "customer_po_date",
+  "section_tools",
+  "tools",
+  "total_tooling_amount",
+  "section_recovery",
+  "payments",
+  "invoices",
+  "col_break_recovery",
+  "ageing_days",
+  "invoiced_amount",
+  "amount_recovered",
+  "outstanding_amount",
+  "recovery_status",
+  "section_more",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "default": "NPD-TOOL-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "NPD-TOOL-.YYYY.-.####",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "section_order",
+   "fieldtype": "Section Break",
+   "label": "Tooling Order"
+  },
+  {
+   "description": "Project this tooling order belongs to",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "col_break_order",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Customer's Purchase Order / LOA number (held manually today)",
+   "fieldname": "customer_po_no",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Customer PO No",
+   "reqd": 1
+  },
+  {
+   "description": "Customer PO date — ageing is measured from here",
+   "fieldname": "customer_po_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Customer PO Date"
+  },
+  {
+   "fieldname": "section_tools",
+   "fieldtype": "Section Break",
+   "label": "Tools"
+  },
+  {
+   "description": "One row per tool. A part can need multiple tools, and each tool may go to a different supplier.",
+   "fieldname": "tools",
+   "fieldtype": "Table",
+   "label": "Tools",
+   "options": "NPD Tooling Item",
+   "reqd": 1
+  },
+  {
+   "description": "Sum of tool line amounts (basic price billed to the customer)",
+   "fieldname": "total_tooling_amount",
+   "fieldtype": "Currency",
+   "label": "Total Tooling Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_recovery",
+   "fieldtype": "Section Break",
+   "label": "Recovery"
+  },
+  {
+   "description": "Payments received from the customer (advances, milestone and final receipts). Money recovered is aggregated across these — this counts even before a tax invoice is raised.",
+   "fieldname": "payments",
+   "fieldtype": "Table",
+   "label": "Payments Received",
+   "options": "NPD Tooling Payment"
+  },
+  {
+   "description": "Customer Sales Invoices billed against this PO (billing reference — recovery is measured from payments received, not invoices).",
+   "fieldname": "invoices",
+   "fieldtype": "Table",
+   "label": "Customer Invoices",
+   "options": "NPD Tooling Invoice"
+  },
+  {
+   "fieldname": "col_break_recovery",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Days elapsed since the customer PO date",
+   "fieldname": "ageing_days",
+   "fieldtype": "Int",
+   "is_virtual": 1,
+   "label": "Ageing (Days)",
+   "read_only": 1
+  },
+  {
+   "description": "Total billed to the customer so far (sum of linked Sales Invoices)",
+   "fieldname": "invoiced_amount",
+   "fieldtype": "Currency",
+   "is_virtual": 1,
+   "label": "Invoiced Amount",
+   "read_only": 1
+  },
+  {
+   "description": "Money actually received from the customer so far (sum of linked Payment Entries)",
+   "fieldname": "amount_recovered",
+   "fieldtype": "Currency",
+   "is_virtual": 1,
+   "label": "Amount Recovered",
+   "read_only": 1
+  },
+  {
+   "description": "Tooling amount still to be recovered (total tooling amount minus amount recovered)",
+   "fieldname": "outstanding_amount",
+   "fieldtype": "Currency",
+   "is_virtual": 1,
+   "label": "Outstanding Amount",
+   "read_only": 1
+  },
+  {
+   "description": "Derived from payments received vs the total tooling amount",
+   "fieldname": "recovery_status",
+   "fieldtype": "Select",
+   "is_virtual": 1,
+   "label": "Recovery Status",
+   "options": "Pending\nPartially Recovered\nFully Recovered",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_more",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "NPD Project Module",
+ "name": "NPD Tooling",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Projects Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Projects User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -174,11 +174,31 @@ def make_test_item(item_code, item_name=None, **kwargs):
 	# Override with any provided kwargs
 	item_data.update(kwargs)
 
+	# On sites with India Compliance, Item validation mandates a valid HSN/SAC code.
+	# Attach an existing one when the field is present and none was supplied. No-op on
+	# sites without the gst_hsn_code field (e.g. non-India setups).
+	if "gst_hsn_code" not in item_data:
+		hsn_code = _get_test_hsn_code()
+		if hsn_code:
+			item_data["gst_hsn_code"] = hsn_code
+
 	item = frappe.get_doc(item_data)
 	item.insert(ignore_permissions=True)
 	frappe.db.commit()
 
 	return item
+
+
+def _get_test_hsn_code():
+	"""Return an existing GST HSN Code to satisfy India Compliance Item validation.
+
+	Returns None when the Item doctype has no gst_hsn_code field or no HSN records
+	exist, so callers on non-India sites are unaffected.
+	"""
+	if not frappe.get_meta("Item").has_field("gst_hsn_code"):
+		return None
+	rows = frappe.get_all("GST HSN Code", fields=["name"], limit=1)
+	return rows[0].name if rows else None
 
 
 def make_test_project(project_name, **kwargs):

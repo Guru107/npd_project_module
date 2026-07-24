@@ -1,0 +1,120 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-07-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "part_number",
+  "tool_item",
+  "description",
+  "col_break_1",
+  "qty",
+  "rate",
+  "amount",
+  "section_supplier",
+  "supplier",
+  "supplier_po",
+  "col_break_2",
+  "tool_status"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "part_number",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Part Number",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "tool_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Tool Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Description"
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty"
+  },
+  {
+   "columns": 1,
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate"
+  },
+  {
+   "columns": 2,
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_supplier",
+   "fieldtype": "Section Break",
+   "label": "Supplier PO"
+  },
+  {
+   "description": "Tool developer this tool is ordered from",
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "description": "ERPNext Purchase Order issued to the tool developer for this tool",
+   "fieldname": "supplier_po",
+   "fieldtype": "Link",
+   "label": "Supplier PO",
+   "options": "Purchase Order"
+  },
+  {
+   "fieldname": "col_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "tool_status",
+   "fieldtype": "Select",
+   "label": "Tool Status",
+   "options": "Draft\nPO Issued\nIn Development\nReceived\nCancelled"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "NPD Project Module",
+ "name": "NPD Tooling Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

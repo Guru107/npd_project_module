@@ -14,8 +14,34 @@ def after_install():
 	create_project_custom_fields()
 	create_item_custom_fields()
 	create_npd_template()
+	create_tooling_setup()
 	frappe.db.commit()
 	print("NPD Project Module: Custom fields and configurations created successfully")
+
+
+def create_tooling_setup():
+	"""
+	Create supporting master data for the NPD Tooling feature.
+
+	Idempotently creates a "Tooling" Item Group so tool Items can be classified
+	consistently. The NPD Tooling doctype and Tooling Recovery Register report ship
+	as app files and are synced automatically on install / migrate.
+	"""
+	item_group = "Tooling"
+	if not frappe.db.exists("Item Group", item_group):
+		parent = "All Item Groups" if frappe.db.exists("Item Group", "All Item Groups") else ""
+		doc = frappe.get_doc(
+			{
+				"doctype": "Item Group",
+				"item_group_name": item_group,
+				"parent_item_group": parent,
+				"is_group": 0,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		print(f"  ✓ Item Group '{item_group}' created")
+	else:
+		print(f"  ✓ Item Group '{item_group}' already exists")
 
 
 def create_task_custom_fields():
