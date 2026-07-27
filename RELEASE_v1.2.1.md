@@ -1,7 +1,11 @@
-# Release v1.2.0
+# Release v1.2.1
 
 ## Release Date
 2026-07-27
+
+## Note on v1.2.0
+
+This supersedes v1.2.0, which was tagged and then withdrawn. The repository had immutable releases enabled at the time, so deleting the v1.2.0 release left an immutable tag that could not be recreated or moved. v1.2.1 republishes the same work under a fresh version — there is no code difference between the two beyond this note and the version string.
 
 ## Overview
 
