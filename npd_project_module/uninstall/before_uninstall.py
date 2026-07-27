@@ -3,6 +3,8 @@
 
 import frappe
 
+from npd_project_module.install.after_install import PROJECT_TOOLING_LINK
+
 
 def before_uninstall():
 	"""
@@ -15,6 +17,7 @@ def before_uninstall():
 	remove_npd_template()
 	remove_custom_report()
 	remove_tooling_setup()
+	remove_project_tooling_connection()
 	remove_custom_doctype()
 	frappe.db.commit()
 
@@ -124,11 +127,19 @@ def remove_tooling_setup():
 	except Exception as e:
 		print(f"  ✗ Error removing Item Group {item_group}: {e!s}")
 
-	# Remove the Project → NPD Tooling connection (custom DocType Link).
+
+def remove_project_tooling_connection():
+	"""
+	Remove the Project → NPD Tooling connection from the Project form's Connections.
+
+	Only the custom (custom=1) DocType Link rows this app creates are deleted; a
+	standard link that reached the site through its own fixtures or customizations is
+	left in place, since this app did not put it there.
+	"""
 	try:
 		links = frappe.get_all(
 			"DocType Link",
-			filters={"parent": "Project", "link_doctype": "NPD Tooling", "custom": 1},
+			filters={**PROJECT_TOOLING_LINK, "custom": 1},
 			pluck="name",
 		)
 		for name in links:

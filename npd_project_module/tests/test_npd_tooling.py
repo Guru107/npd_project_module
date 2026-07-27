@@ -2,7 +2,8 @@
 # For license information, please see license.txt
 
 """
-Unit tests for the NPD Tooling order doctype and Tooling Recovery Register report.
+Unit tests for the NPD Tooling order doctype, the Tooling Recovery Register report, and
+the Project → NPD Tooling connection this app adds to the Project form.
 
 An NPD Tooling record is a customer-PO tooling order with child tool lines (a part can
 need several tools, each possibly from a different supplier). Recovery combines money paid
@@ -10,13 +11,17 @@ against linked Sales Invoices with manual advance allocations (for receipts not 
 invoice), versus the total tooling amount, so it counts even before a tax invoice exists
 and never double-counts. The double-count-free combination is unit-tested purely; order
 totals, ageing, and manual-allocation recovery are tested end-to-end, with the Payment
-Entry helper skipping gracefully if the site lacks the accounting fixtures.
+Entry helper skipping gracefully if the site lacks the accounting fixtures. The Project
+connection is checked through the Project dashboard data the form actually renders.
 """
 
 import frappe
 from frappe.utils import add_days, getdate, today
 
-from npd_project_module.install.after_install import add_project_tooling_connection
+from npd_project_module.install.after_install import (
+	PROJECT_TOOLING_LINK,
+	add_project_tooling_connection,
+)
 from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import (
 	compute_recovered,
 	compute_recovery_status,
@@ -514,28 +519,6 @@ class TestRecoveryStatusLogic(NPDProjectModuleTestSuite):
 		self.assertEqual(compute_recovery_status(1000, 999.995), "Fully Recovered")
 
 
-class TestProjectDashboardConnection(NPDProjectModuleTestSuite):
-	"""The Project form's Connections should surface NPD Tooling via a custom DocType Link."""
-
-	def _tooling_in_connections(self):
-		data = frappe.get_meta("Project").get_dashboard_data()
-		return any("NPD Tooling" in (g.get("items") or []) for g in data.get("transactions", []))
-
-	def test_connection_present(self):
-		add_project_tooling_connection()
-		frappe.clear_cache(doctype="Project")
-		self.assertTrue(
-			frappe.db.exists("DocType Link", {"parent": "Project", "link_doctype": "NPD Tooling"})
-		)
-		self.assertTrue(self._tooling_in_connections())
-
-	def test_idempotent(self):
-		add_project_tooling_connection()
-		add_project_tooling_connection()  # second call must not duplicate
-		links = frappe.get_all("DocType Link", filters={"parent": "Project", "link_doctype": "NPD Tooling"})
-		self.assertEqual(len(links), 1)
-
-
 class TestRecoveredComputation(NPDProjectModuleTestSuite):
 	"""Pure-logic tests for combining invoice payments with manual advance allocations."""
 
@@ -562,3 +545,43 @@ class TestRecoveredComputation(NPDProjectModuleTestSuite):
 	def test_unpaid_invoice_contributes_zero(self):
 		# A fully-outstanding invoice means nothing has been recovered through it.
 		self.assertEqual(compute_recovered([(1000, 1000)], [], set()), 0)
+
+
+class TestProjectDashboardConnection(NPDProjectModuleTestSuite):
+	"""The Project form's Connections should surface NPD Tooling via a custom DocType Link.
+
+	These tests write to the core Project doctype, so setUp records the links already on
+	the site and tearDown deletes only what the test itself added — the site is left
+	exactly as it was found, whether or not the app was already installed on it.
+	"""
+
+	def setUp(self):
+		super().setUp()
+		self.preexisting_links = set(self._tooling_links())
+
+	def tearDown(self):
+		for name in set(self._tooling_links()) - self.preexisting_links:
+			frappe.delete_doc("DocType Link", name, force=True, ignore_permissions=True)
+		frappe.db.commit()
+		frappe.clear_cache(doctype="Project")
+		super().tearDown()
+
+	def _tooling_links(self):
+		"""Names of every DocType Link connecting Project to NPD Tooling."""
+		return frappe.get_all("DocType Link", filters=PROJECT_TOOLING_LINK, pluck="name")
+
+	def _tooling_in_connections(self):
+		"""Whether NPD Tooling shows up in the dashboard data the Project form renders."""
+		transactions = frappe.get_meta("Project").get_dashboard_data().get("transactions", [])
+		return any("NPD Tooling" in (group.get("items") or []) for group in transactions)
+
+	def test_connection_present(self):
+		add_project_tooling_connection()
+		frappe.clear_cache(doctype="Project")
+		self.assertTrue(self._tooling_links())
+		self.assertTrue(self._tooling_in_connections())
+
+	def test_idempotent(self):
+		add_project_tooling_connection()
+		add_project_tooling_connection()  # second call must not duplicate
+		self.assertEqual(len(self._tooling_links()), 1)
