@@ -187,9 +187,9 @@ before_tests = "npd_project_module.utils.test_setup.before_tests"
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "npd_project_module.task.get_dashboard_data"
-# }
+override_doctype_dashboards = {
+	"Project": "npd_project_module.utils.dashboard_overrides.get_project_dashboard_data"
+}
 
 # exempt linked doctypes from being automatically cancelled
 #

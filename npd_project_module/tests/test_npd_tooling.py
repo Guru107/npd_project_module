@@ -29,6 +29,7 @@ from npd_project_module.tests.utils import (
 	make_test_item,
 	make_test_project_with_parts,
 )
+from npd_project_module.utils.dashboard_overrides import get_project_dashboard_data
 
 
 class TestNPDTooling(NPDProjectModuleTestSuite):
@@ -511,6 +512,21 @@ class TestRecoveryStatusLogic(NPDProjectModuleTestSuite):
 
 	def test_fully_recovered_within_rounding_tolerance(self):
 		self.assertEqual(compute_recovery_status(1000, 999.995), "Fully Recovered")
+
+
+class TestProjectDashboardConnection(NPDProjectModuleTestSuite):
+	"""The Project form's Connections should surface NPD Tooling."""
+
+	def test_adds_tooling_group(self):
+		data = get_project_dashboard_data({"transactions": []})
+		self.assertTrue(any("NPD Tooling" in (g.get("items") or []) for g in data["transactions"]))
+
+	def test_idempotent(self):
+		# Running twice (or over data that already lists it) must not duplicate the entry.
+		once = get_project_dashboard_data({"transactions": []})
+		twice = get_project_dashboard_data(once)
+		count = sum((g.get("items") or []).count("NPD Tooling") for g in twice["transactions"])
+		self.assertEqual(count, 1)
 
 
 class TestRecoveredComputation(NPDProjectModuleTestSuite):
