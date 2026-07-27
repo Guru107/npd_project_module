@@ -124,6 +124,21 @@ def remove_tooling_setup():
 	except Exception as e:
 		print(f"  ✗ Error removing Item Group {item_group}: {e!s}")
 
+	# Remove the Project → NPD Tooling connection (custom DocType Link).
+	try:
+		links = frappe.get_all(
+			"DocType Link",
+			filters={"parent": "Project", "link_doctype": "NPD Tooling", "custom": 1},
+			pluck="name",
+		)
+		for name in links:
+			frappe.delete_doc("DocType Link", name, force=True, ignore_permissions=True)
+		if links:
+			frappe.clear_cache(doctype="Project")
+			print("  ✓ Removed Project → NPD Tooling connection")
+	except Exception as e:
+		print(f"  ✗ Error removing Project → NPD Tooling connection: {e!s}")
+
 
 def remove_custom_doctype():
 	"""

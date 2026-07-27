@@ -16,6 +16,7 @@ Entry helper skipping gracefully if the site lacks the accounting fixtures.
 import frappe
 from frappe.utils import add_days, getdate, today
 
+from npd_project_module.install.after_install import add_project_tooling_connection
 from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import (
 	compute_recovered,
 	compute_recovery_status,
@@ -29,7 +30,6 @@ from npd_project_module.tests.utils import (
 	make_test_item,
 	make_test_project_with_parts,
 )
-from npd_project_module.utils.dashboard_overrides import get_project_dashboard_data
 
 
 class TestNPDTooling(NPDProjectModuleTestSuite):
@@ -515,18 +515,25 @@ class TestRecoveryStatusLogic(NPDProjectModuleTestSuite):
 
 
 class TestProjectDashboardConnection(NPDProjectModuleTestSuite):
-	"""The Project form's Connections should surface NPD Tooling."""
+	"""The Project form's Connections should surface NPD Tooling via a custom DocType Link."""
 
-	def test_adds_tooling_group(self):
-		data = get_project_dashboard_data({"transactions": []})
-		self.assertTrue(any("NPD Tooling" in (g.get("items") or []) for g in data["transactions"]))
+	def _tooling_in_connections(self):
+		data = frappe.get_meta("Project").get_dashboard_data()
+		return any("NPD Tooling" in (g.get("items") or []) for g in data.get("transactions", []))
+
+	def test_connection_present(self):
+		add_project_tooling_connection()
+		frappe.clear_cache(doctype="Project")
+		self.assertTrue(
+			frappe.db.exists("DocType Link", {"parent": "Project", "link_doctype": "NPD Tooling"})
+		)
+		self.assertTrue(self._tooling_in_connections())
 
 	def test_idempotent(self):
-		# Running twice (or over data that already lists it) must not duplicate the entry.
-		once = get_project_dashboard_data({"transactions": []})
-		twice = get_project_dashboard_data(once)
-		count = sum((g.get("items") or []).count("NPD Tooling") for g in twice["transactions"])
-		self.assertEqual(count, 1)
+		add_project_tooling_connection()
+		add_project_tooling_connection()  # second call must not duplicate
+		links = frappe.get_all("DocType Link", filters={"parent": "Project", "link_doctype": "NPD Tooling"})
+		self.assertEqual(len(links), 1)
 
 
 class TestRecoveredComputation(NPDProjectModuleTestSuite):

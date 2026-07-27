@@ -43,6 +43,35 @@ def create_tooling_setup():
 	else:
 		print(f"  ✓ Item Group '{item_group}' already exists")
 
+	add_project_tooling_connection()
+
+
+def add_project_tooling_connection():
+	"""Surface NPD Tooling in the Project form's Connections via a custom DocType Link.
+
+	NPD Tooling links to Project through its `project` field, matching the Project
+	dashboard's default fieldname, so the connection count resolves automatically. A
+	custom (custom=1) link is preserved across `bench migrate`. Idempotent.
+	"""
+	if frappe.db.exists("DocType Link", {"parent": "Project", "link_doctype": "NPD Tooling", "custom": 1}):
+		print("  ✓ Project → NPD Tooling connection already present")
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "DocType Link",
+			"parent": "Project",
+			"parenttype": "DocType",
+			"parentfield": "links",
+			"link_doctype": "NPD Tooling",
+			"link_fieldname": "project",
+			"group": "Tooling",
+			"custom": 1,
+		}
+	).insert(ignore_permissions=True)
+	frappe.clear_cache(doctype="Project")
+	print("  ✓ Project → NPD Tooling connection added")
+
 
 def create_task_custom_fields():
 	"""
