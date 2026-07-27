@@ -4,6 +4,12 @@
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
+# Identity of the Project → NPD Tooling connection (a DocType Link row on Project).
+# Shared by the install guard, the uninstall cleanup and the tests so the three can
+# never drift apart. Deliberately does not pin `custom` — see
+# add_project_tooling_connection.
+PROJECT_TOOLING_LINK = {"parent": "Project", "link_doctype": "NPD Tooling"}
+
 
 def after_install():
 	"""
@@ -15,6 +21,7 @@ def after_install():
 	create_item_custom_fields()
 	create_npd_template()
 	create_tooling_setup()
+	add_project_tooling_connection()
 	frappe.db.commit()
 	print("NPD Project Module: Custom fields and configurations created successfully")
 
@@ -42,6 +49,40 @@ def create_tooling_setup():
 		print(f"  ✓ Item Group '{item_group}' created")
 	else:
 		print(f"  ✓ Item Group '{item_group}' already exists")
+
+
+def add_project_tooling_connection():
+	"""Surface NPD Tooling in the Project form's Connections via a custom DocType Link.
+
+	NPD Tooling links to Project through its `project` field, matching the Project
+	dashboard's default fieldname, so the connection count resolves automatically.
+
+	The guard matches on parent + link_doctype only, not on `custom=1`: a site that
+	ships the same connection through fixtures or `export-customizations` has a
+	standard (custom=0) row, and adding a custom one alongside it would list NPD
+	Tooling twice in Connections.
+
+	Idempotent, and re-asserted on every `bench migrate` (see install/after_migrate.py)
+	because re-importing `project.json` drops every DocType Link row on Project,
+	custom ones included.
+	"""
+	if frappe.db.exists("DocType Link", PROJECT_TOOLING_LINK):
+		print("  ✓ Project → NPD Tooling connection already present")
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "DocType Link",
+			**PROJECT_TOOLING_LINK,
+			"parenttype": "DocType",
+			"parentfield": "links",
+			"link_fieldname": "project",
+			"group": "Tooling",
+			"custom": 1,
+		}
+	).insert(ignore_permissions=True)
+	frappe.clear_cache(doctype="Project")
+	print("  ✓ Project → NPD Tooling connection added")
 
 
 def create_task_custom_fields():

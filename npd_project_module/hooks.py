@@ -88,6 +88,13 @@ doctype_list_js = {"Task": "public/js/task_list.js"}
 # before_install = "npd_project_module.install.before_install"
 after_install = "npd_project_module.install.after_install.after_install"
 
+# Migration
+# ------------
+
+# Re-asserts the Project → NPD Tooling connection, which an ERPNext upgrade that
+# re-imports project.json would otherwise drop. See install/after_migrate.py.
+after_migrate = "npd_project_module.install.after_migrate.after_migrate"
+
 # Uninstallation
 # ------------
 
@@ -190,6 +197,10 @@ before_tests = "npd_project_module.utils.test_setup.before_tests"
 # override_doctype_dashboards = {
 # 	"Task": "npd_project_module.task.get_dashboard_data"
 # }
+#
+# The Project → NPD Tooling connection is added as a custom DocType Link in
+# install/after_install.py (add_project_tooling_connection) instead of via this hook,
+# and re-asserted by the after_migrate hook above.
 
 # exempt linked doctypes from being automatically cancelled
 #
