@@ -1,8 +1,6 @@
 # Copyright (c) 2026, Guru107 and contributors
 # For license information, please see license.txt
 
-import frappe
-
 from npd_project_module.install.after_install import add_project_tooling_connection
 
 
@@ -18,7 +16,8 @@ def after_migrate():
 	from that, so the connection is re-created here on each `bench migrate` instead.
 
 	Runs after doctype sync and after patches, and the helper is idempotent, so this is
-	a no-op on the migrates where nothing was dropped.
+	a no-op on the migrates where nothing was dropped. No manual commit: migrate calls
+	these hooks from its `@atomic` post_schema_updates, which commits on success and
+	rolls back if anything in the phase raises.
 	"""
 	add_project_tooling_connection()
-	frappe.db.commit()
