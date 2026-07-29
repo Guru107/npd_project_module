@@ -25,8 +25,8 @@ This app enables structured tracking of multi-part product development through m
 
 ### Technology Stack
 
-- **Framework**: Frappe Framework (v15)
-- **ERP**: ERPNext (v15)
+- **Framework**: Frappe Framework (v15, v16)
+- **ERP**: ERPNext (v15, v16)
 - **Language**: Python 3.10+
 - **Frontend**: Frappe's JavaScript framework
 - **Build System**: flit_core
@@ -219,8 +219,10 @@ This ensures code is automatically formatted and linted before commits.
 
 ### Key Dependencies
 
-- **Frappe Framework**: ~15.0.0 (managed by bench)
-- **ERPNext**: Required for Project and Item doctypes
+- **Frappe Framework**: `>=15.0.0,<17.0.0` — v15 and v16 are both supported; installed and managed by bench
+- **ERPNext**: `>=15.0.0,<17.0.0` — required for the Project and Item doctypes
+
+Both ranges are declared in `pyproject.toml` under `[tool.bench.frappe-dependencies]`, so `bench get-app` / `bench install-app` refuses an incompatible major up front rather than failing at runtime. Keep that section and this list in sync.
 
 ### Known Limitations
 
