@@ -21,7 +21,7 @@ class NPDToolingItem(Document):
 		supplier: DF.Link | None
 		supplier_po: DF.Link | None
 		tool_item: DF.Link
-		tool_status: DF.Literal["Draft", "PO Issued", "In Development", "Received", "Cancelled"]
+		tool_status: DF.Data | None
 	# end: auto-generated types
 
 	pass

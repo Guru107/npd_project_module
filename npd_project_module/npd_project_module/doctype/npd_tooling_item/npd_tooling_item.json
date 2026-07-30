@@ -97,11 +97,11 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "Draft",
+   "description": "Derived from the matching Supplier PO line item's receipt status; not entered manually",
    "fieldname": "tool_status",
-   "fieldtype": "Select",
-   "label": "Tool Status",
-   "options": "Draft\nPO Issued\nIn Development\nReceived\nCancelled"
+   "fieldtype": "Data",
+   "label": "Tool / PO Status",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

@@ -17,6 +17,7 @@ from frappe.utils import date_diff, flt, getdate, today
 from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import (
 	compute_recovered,
 	compute_recovery_status,
+	get_tool_po_status,
 )
 
 
@@ -165,7 +166,7 @@ def get_data(filters):
 				"amount": tool.amount,
 				"supplier": tool.supplier,
 				"supplier_po": tool.supplier_po,
-				"tool_status": tool.tool_status,
+				"tool_status": get_tool_po_status(tool.supplier_po, tool.tool_item),
 				"customer": order.customer,
 				"customer_po_no": order.customer_po_no,
 				"customer_po_date": order.customer_po_date,

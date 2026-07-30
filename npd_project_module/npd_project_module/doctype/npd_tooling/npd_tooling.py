@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import date_diff, flt, getdate, today
+from frappe.utils import cint, date_diff, flt, getdate, today
 
 
 class NPDTooling(Document):
@@ -30,6 +30,7 @@ class NPDTooling(Document):
 
 	def validate(self):
 		self._set_line_amounts_and_total()
+		self._set_tool_statuses()
 		self._set_payment_allocations()
 
 	def _set_line_amounts_and_total(self):
@@ -39,6 +40,11 @@ class NPDTooling(Document):
 			row.amount = flt(row.qty) * flt(row.rate)
 			total += flt(row.amount)
 		self.total_tooling_amount = total
+
+	def _set_tool_statuses(self):
+		"""Derive each tool line's status from its matching Supplier PO line item."""
+		for row in self.tools:
+			row.tool_status = get_tool_po_status(row.supplier_po, row.tool_item)
 
 	def _set_payment_allocations(self):
 		"""Default and sanity-check the amount allocated from each receipt to this PO.
@@ -162,6 +168,43 @@ def compute_recovered(invoice_figures, payment_allocations, payments_on_invoice)
 	on_invoice = set(payments_on_invoice or ())
 	advances = sum(flt(amt) for pe, amt in payment_allocations if pe not in on_invoice)
 	return invoice_paid + advances
+
+
+def get_tool_po_status(supplier_po, tool_item):
+	"""Derive a tool's status from its matching Supplier Purchase Order line item.
+
+	The status is per-tool, not per-PO: on a PO with several tools, each tool reflects
+	its own line's receipt state (received_qty vs qty). Returns one of Draft / Ordered /
+	Partially Received / Received / Cancelled, or None when no Supplier PO is linked.
+	"""
+	if not supplier_po:
+		return None
+
+	po = frappe.db.get_value("Purchase Order", supplier_po, ["docstatus", "status"], as_dict=True)
+	if not po:
+		return None
+	if cint(po.docstatus) == 2:
+		return "Cancelled"
+	if cint(po.docstatus) == 0:
+		return "Draft"
+
+	# Submitted PO: derive from the matching line item(s) for this tool.
+	rows = frappe.get_all(
+		"Purchase Order Item",
+		filters={"parent": supplier_po, "item_code": tool_item},
+		fields=["qty", "received_qty"],
+	)
+	if not rows:
+		# Tool isn't a line on the linked PO — fall back to the overall PO status.
+		return po.status
+
+	total_qty = sum(flt(r.qty) for r in rows)
+	received_qty = sum(flt(r.received_qty) for r in rows)
+	if received_qty <= 0:
+		return "Ordered"
+	if received_qty >= total_qty:
+		return "Received"
+	return "Partially Received"
 
 
 def compute_recovery_status(target, recovered):
