@@ -170,41 +170,55 @@ def compute_recovered(invoice_figures, payment_allocations, payments_on_invoice)
 	return invoice_paid + advances
 
 
-def get_tool_po_status(supplier_po, tool_item):
-	"""Derive a tool's status from its matching Supplier Purchase Order line item.
+def compute_tool_status(docstatus, po_item_rows):
+	"""Derive a tool's status from its PO docstatus and matching PO Item line(s).
 
-	The status is per-tool, not per-PO: on a PO with several tools, each tool reflects
-	its own line's receipt state (received_qty vs qty). Returns one of Draft / Ordered /
-	Partially Received / Received / Cancelled, or None when no Supplier PO is linked.
+	Pure and side-effect-free so the single lookup and the report's batched path share
+	one rule set. `po_item_rows` are the Purchase Order Item rows (each with qty and
+	received_qty) for this tool on a submitted PO. Returns one of Draft / Ordered /
+	Partially Received / Received / Cancelled / Not on PO, or None when the PO is missing.
 	"""
-	if not supplier_po:
+	if docstatus is None:
 		return None
-
-	po = frappe.db.get_value("Purchase Order", supplier_po, ["docstatus", "status"], as_dict=True)
-	if not po:
-		return None
-	if cint(po.docstatus) == 2:
+	ds = cint(docstatus)
+	if ds == 2:
 		return "Cancelled"
-	if cint(po.docstatus) == 0:
+	if ds == 0:
 		return "Draft"
+	if not po_item_rows:
+		# Submitted PO, but this tool isn't one of its line items.
+		return "Not on PO"
 
-	# Submitted PO: derive from the matching line item(s) for this tool.
-	rows = frappe.get_all(
-		"Purchase Order Item",
-		filters={"parent": supplier_po, "item_code": tool_item},
-		fields=["qty", "received_qty"],
-	)
-	if not rows:
-		# Tool isn't a line on the linked PO — fall back to the overall PO status.
-		return po.status
-
-	total_qty = sum(flt(r.qty) for r in rows)
-	received_qty = sum(flt(r.received_qty) for r in rows)
+	total_qty = sum(flt(r["qty"]) for r in po_item_rows)
+	received_qty = sum(flt(r["received_qty"]) for r in po_item_rows)
 	if received_qty <= 0:
 		return "Ordered"
 	if received_qty >= total_qty:
 		return "Received"
 	return "Partially Received"
+
+
+def get_tool_po_status(supplier_po, tool_item):
+	"""Status for one tool from its matching Supplier PO line item (single lookup).
+
+	The status is per-tool, not per-PO: on a PO with several tools, each tool reflects
+	its own line's receipt state. Returns None when no Supplier PO is linked (or it no
+	longer exists). See compute_tool_status for the derived values.
+	"""
+	if not supplier_po:
+		return None
+	docstatus = frappe.db.get_value("Purchase Order", supplier_po, "docstatus")
+	if docstatus is None:
+		return None
+
+	rows = []
+	if cint(docstatus) == 1:  # only a submitted PO has meaningful receipt lines
+		rows = frappe.get_all(
+			"Purchase Order Item",
+			filters={"parent": supplier_po, "item_code": tool_item},
+			fields=["qty", "received_qty"],
+		)
+	return compute_tool_status(docstatus, rows)
 
 
 def compute_recovery_status(target, recovered):

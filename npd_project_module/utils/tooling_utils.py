@@ -15,7 +15,8 @@ def refresh_tool_statuses(tooling):
 	Lets users pull the latest without editing the order — useful when a PO's receipt
 	state changed after the tooling order was last saved. Returns how many rows changed.
 	"""
-	frappe.has_permission("NPD Tooling", "read", doc=tooling, throw=True)
+	# Writes derived values onto the order's child rows, so require write permission.
+	frappe.has_permission("NPD Tooling", "write", doc=tooling, throw=True)
 
 	updated = 0
 	for row in frappe.get_all(

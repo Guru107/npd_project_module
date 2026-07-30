@@ -599,6 +599,86 @@ class TestNPDTooling(NPDProjectModuleTestSuite):
 		doc.reload()
 		self.assertEqual(doc.tools[0].tool_status, "Received")
 
+	def test_tool_status_not_on_po(self):
+		"""A tool linked to a PO that doesn't contain it reads as 'Not on PO'."""
+		company = self._company()
+		supplier = self._make_supplier()
+		part = make_test_item("_Test Tooling Part")
+		tool_on_po = make_test_item("_Test Tool On PO", item_group="Tooling")
+		tool_off_po = make_test_item("_Test Tool Off PO", item_group="Tooling")
+		self.test_items.extend([part, tool_on_po, tool_off_po])
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_projects.append(project.project_name)
+		# PO contains only tool_on_po; the tooling line references tool_off_po.
+		po = self._make_purchase_order(supplier, company, [tool_on_po.item_code])
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer_po_no": "PO-NOTON-1",
+				"tools": [
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_off_po.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+		self.assertEqual(doc.tools[0].tool_status, "Not on PO")
+
+	def test_report_tool_status_is_live_per_line(self):
+		"""The register computes tool status live per PO line, without re-saving the order."""
+		company = self._company()
+		supplier = self._make_supplier()
+		part = make_test_item("_Test Tooling Part")
+		tool_a = make_test_item("_Test Tool A", item_group="Tooling")
+		tool_b = make_test_item("_Test Tool B", item_group="Tooling")
+		self.test_items.extend([part, tool_a, tool_b])
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_projects.append(project.project_name)
+		po = self._make_purchase_order(supplier, company, [tool_a.item_code, tool_b.item_code])
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer_po_no": "PO-RPT-1",
+				"tools": [
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_a.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_b.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+
+		# Receive only tool A after the order was saved — the report reflects it live.
+		poi = frappe.get_all(
+			"Purchase Order Item",
+			filters={"parent": po, "item_code": tool_a.item_code},
+			fields=["name", "qty"],
+		)[0]
+		frappe.db.set_value("Purchase Order Item", poi.name, "received_qty", poi.qty)
+
+		_columns, data = run_recovery_register({"project": doc.project})
+		by_tool = {r["tool_item"]: r["tool_status"] for r in data if r["order"] == doc.name}
+		self.assertEqual(by_tool[tool_a.item_code], "Received")
+		self.assertEqual(by_tool[tool_b.item_code], "Ordered")
+
 	def test_recovery_from_invoice_payment(self):
 		"""Recovery derives from invoice outstanding: nothing until paid, full once paid."""
 		company = self._company()

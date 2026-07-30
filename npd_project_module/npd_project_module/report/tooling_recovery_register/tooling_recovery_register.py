@@ -17,7 +17,7 @@ from frappe.utils import date_diff, flt, getdate, today
 from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import (
 	compute_recovered,
 	compute_recovery_status,
-	get_tool_po_status,
+	compute_tool_status,
 )
 
 
@@ -139,10 +139,13 @@ def get_data(filters):
 			"amount",
 			"supplier",
 			"supplier_po",
-			"tool_status",
 		],
 		order_by="parent asc, idx asc",
 	)
+
+	# Tool status is computed live from the PO here (the form stores it on save); batched
+	# across all rows to avoid a per-row query pair.
+	po_docstatus, po_items = _po_status_maps(tools)
 
 	status_filter = filters.get("recovery_status")
 	rows = []
@@ -156,6 +159,10 @@ def get_data(filters):
 		if status_filter and rec.get("recovery_status") != status_filter:
 			continue
 
+		tool_status = compute_tool_status(
+			po_docstatus.get(tool.supplier_po) if tool.supplier_po else None,
+			po_items.get((tool.supplier_po, tool.tool_item), []),
+		)
 		rows.append(
 			{
 				"order": tool.parent,
@@ -166,7 +173,7 @@ def get_data(filters):
 				"amount": tool.amount,
 				"supplier": tool.supplier,
 				"supplier_po": tool.supplier_po,
-				"tool_status": get_tool_po_status(tool.supplier_po, tool.tool_item),
+				"tool_status": tool_status,
 				"customer": order.customer,
 				"customer_po_no": order.customer_po_no,
 				"customer_po_date": order.customer_po_date,
@@ -179,6 +186,29 @@ def get_data(filters):
 		)
 
 	return rows
+
+
+def _po_status_maps(tools):
+	"""Batch-fetch the data needed to derive each tool's PO status.
+
+	Returns ({supplier_po: docstatus}, {(supplier_po, item_code): [po_item_rows]}) — two
+	queries total, regardless of how many tool rows the register has.
+	"""
+	pos = list({t.supplier_po for t in tools if t.supplier_po})
+	docstatus_map = {}
+	items_map = {}
+	if pos:
+		for po in frappe.get_all(
+			"Purchase Order", filters={"name": ["in", pos]}, fields=["name", "docstatus"]
+		):
+			docstatus_map[po.name] = po.docstatus
+		for r in frappe.get_all(
+			"Purchase Order Item",
+			filters={"parent": ["in", pos]},
+			fields=["parent", "item_code", "qty", "received_qty"],
+		):
+			items_map.setdefault((r.parent, r.item_code), []).append(r)
+	return docstatus_map, items_map
 
 
 def _compute_recovery(order_info):
