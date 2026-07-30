@@ -9,7 +9,7 @@ from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling impor
 
 
 @frappe.whitelist()
-def refresh_tool_statuses(tooling):
+def refresh_tool_statuses(tooling: str):
 	"""Re-derive each tool line's status from its Supplier PO line and store it.
 
 	Lets users pull the latest without editing the order — useful when a PO's receipt
