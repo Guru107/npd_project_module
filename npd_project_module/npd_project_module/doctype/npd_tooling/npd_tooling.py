@@ -43,8 +43,9 @@ class NPDTooling(Document):
 
 	def _set_tool_statuses(self):
 		"""Derive each tool line's status from its matching Supplier PO line item."""
+		statuses = get_tool_po_statuses((row.supplier_po, row.tool_item) for row in self.tools)
 		for row in self.tools:
-			row.tool_status = get_tool_po_status(row.supplier_po, row.tool_item)
+			row.tool_status = statuses.get((row.supplier_po, row.tool_item))
 
 	def _set_payment_allocations(self):
 		"""Default and sanity-check the amount allocated from each receipt to this PO.
@@ -198,27 +199,35 @@ def compute_tool_status(docstatus, po_item_rows):
 	return "Partially Received"
 
 
-def get_tool_po_status(supplier_po, tool_item):
-	"""Status for one tool from its matching Supplier PO line item (single lookup).
+def get_tool_po_statuses(tool_refs):
+	"""Per-tool PO status for many tools at once (two queries for the whole set).
 
-	The status is per-tool, not per-PO: on a PO with several tools, each tool reflects
-	its own line's receipt state. Returns None when no Supplier PO is linked (or it no
-	longer exists). See compute_tool_status for the derived values.
+	`tool_refs` is an iterable of ``(supplier_po, tool_item)`` pairs; returns a dict keyed
+	by that pair. Status is per-tool, not per-PO: on a PO with several tools, each tool
+	reflects its own line's receipt state. A pair with no Supplier PO (or a missing PO)
+	maps to None. See compute_tool_status for the derived values.
 	"""
-	if not supplier_po:
-		return None
-	docstatus = frappe.db.get_value("Purchase Order", supplier_po, "docstatus")
-	if docstatus is None:
-		return None
+	refs = list(tool_refs)
+	purchase_orders = list({po for po, _item in refs if po})
 
-	rows = []
-	if cint(docstatus) == 1:  # only a submitted PO has meaningful receipt lines
-		rows = frappe.get_all(
+	docstatus_map = {}
+	items_map = {}
+	if purchase_orders:
+		for po in frappe.get_all(
+			"Purchase Order", filters={"name": ["in", purchase_orders]}, fields=["name", "docstatus"]
+		):
+			docstatus_map[po.name] = po.docstatus
+		for r in frappe.get_all(
 			"Purchase Order Item",
-			filters={"parent": supplier_po, "item_code": tool_item},
-			fields=["qty", "received_qty"],
-		)
-	return compute_tool_status(docstatus, rows)
+			filters={"parent": ["in", purchase_orders]},
+			fields=["parent", "item_code", "qty", "received_qty"],
+		):
+			items_map.setdefault((r.parent, r.item_code), []).append(r)
+
+	return {
+		(po, item): compute_tool_status(docstatus_map.get(po), items_map.get((po, item), []))
+		for po, item in refs
+	}
 
 
 def compute_recovery_status(target, recovered):

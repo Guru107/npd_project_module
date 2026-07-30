@@ -5,7 +5,7 @@
 
 import frappe
 
-from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import get_tool_po_status
+from npd_project_module.npd_project_module.doctype.npd_tooling.npd_tooling import get_tool_po_statuses
 
 
 @frappe.whitelist()
@@ -18,15 +18,18 @@ def refresh_tool_statuses(tooling):
 	# Writes derived values onto the order's child rows, so require write permission.
 	frappe.has_permission("NPD Tooling", "write", doc=tooling, throw=True)
 
-	updated = 0
-	for row in frappe.get_all(
+	rows = frappe.get_all(
 		"NPD Tooling Item",
 		filters={"parent": tooling, "parenttype": "NPD Tooling"},
 		fields=["name", "supplier_po", "tool_item", "tool_status"],
-	):
-		status = get_tool_po_status(row.supplier_po, row.tool_item)
-		if status != row.tool_status:
-			frappe.db.set_value("NPD Tooling Item", row.name, "tool_status", status, update_modified=False)
+	)
+	statuses = get_tool_po_statuses((r.supplier_po, r.tool_item) for r in rows)
+
+	updated = 0
+	for r in rows:
+		status = statuses.get((r.supplier_po, r.tool_item))
+		if status != r.tool_status:
+			frappe.db.set_value("NPD Tooling Item", r.name, "tool_status", status, update_modified=False)
 			updated += 1
 
 	if updated:
