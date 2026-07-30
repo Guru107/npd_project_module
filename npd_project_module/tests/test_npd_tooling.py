@@ -35,6 +35,7 @@ from npd_project_module.tests.utils import (
 	make_test_item,
 	make_test_project_with_parts,
 )
+from npd_project_module.utils.tooling_utils import refresh_tool_statuses
 
 
 class TestNPDTooling(NPDProjectModuleTestSuite):
@@ -158,6 +159,43 @@ class TestNPDTooling(NPDProjectModuleTestSuite):
 			frappe.delete_doc(doctype, name, force=True, ignore_permissions=True)
 		except Exception:
 			pass
+
+	def _make_supplier(self):
+		name = "_Test Tool Supplier"
+		if not frappe.db.exists("Supplier", name):
+			group = frappe.db.get_value("Supplier Group", {"is_group": 0}, "name") or frappe.db.get_value(
+				"Supplier Group", {}, "name"
+			)
+			frappe.get_doc({"doctype": "Supplier", "supplier_name": name, "supplier_group": group}).insert(
+				ignore_permissions=True
+			)
+			self.addCleanup(lambda: frappe.delete_doc("Supplier", name, force=True, ignore_permissions=True))
+		return name
+
+	def _make_purchase_order(self, supplier, company, item_codes, submit=True):
+		"""Create a Purchase Order with a line per item; skip gracefully if fixtures are missing."""
+		self._ensure_fiscal_year(company, today())
+		try:
+			po = frappe.get_doc(
+				{
+					"doctype": "Purchase Order",
+					"supplier": supplier,
+					"company": company,
+					"transaction_date": today(),
+					"schedule_date": today(),
+					"items": [
+						{"item_code": ic, "qty": 1, "rate": 100, "schedule_date": today()}
+						for ic in item_codes
+					],
+				}
+			)
+			po.insert(ignore_permissions=True)
+			if submit:
+				po.submit()
+		except Exception as e:
+			self.skipTest(f"Purchase Order could not be created in this environment: {e}")
+		self.addCleanup(self._cancel_delete, "Purchase Order", po.name)
+		return po.name
 
 	def _ensure_fiscal_year(self, company, date):
 		"""Make sure the company has an active Fiscal Year for `date` so GL postings submit."""
@@ -430,6 +468,216 @@ class TestNPDTooling(NPDProjectModuleTestSuite):
 		self.test_tooling.append(doc.name)
 		si = self._make_sales_invoice(customer, company, tool.item_code, rate)
 		return doc, si
+
+	def test_tool_status_none_without_po(self):
+		"""A tool line with no Supplier PO has no derived status (never manually set)."""
+		doc = self._make_order()  # default tool line has no supplier_po
+		self.assertFalse(doc.tools[0].tool_status)
+
+	def test_tool_status_per_po_line(self):
+		"""Status is per-tool: on one PO with two tools, a received tool and an unreceived
+		tool show different statuses (the user's scenario)."""
+		company = self._company()
+		supplier = self._make_supplier()
+		part = make_test_item("_Test Tooling Part")
+		tool_a = make_test_item("_Test Tool A", item_group="Tooling")
+		tool_b = make_test_item("_Test Tool B", item_group="Tooling")
+		self.test_items.extend([part, tool_a, tool_b])
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_projects.append(project.project_name)
+
+		po = self._make_purchase_order(supplier, company, [tool_a.item_code, tool_b.item_code])
+
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer_po_no": "PO-STATUS-1",
+				"tools": [
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_a.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_b.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+
+		# Submitted PO, nothing received yet → both Ordered.
+		self.assertEqual(doc.tools[0].tool_status, "Ordered")
+		self.assertEqual(doc.tools[1].tool_status, "Ordered")
+
+		# Fully receive only tool A's PO line (simulate a Purchase Receipt updating received_qty).
+		poi = frappe.get_all(
+			"Purchase Order Item",
+			filters={"parent": po, "item_code": tool_a.item_code},
+			fields=["name", "qty"],
+		)[0]
+		frappe.db.set_value("Purchase Order Item", poi.name, "received_qty", poi.qty)
+
+		doc.save(ignore_permissions=True)
+		doc.reload()
+		self.assertEqual(doc.tools[0].tool_status, "Received")  # tool A received
+		self.assertEqual(doc.tools[1].tool_status, "Ordered")  # tool B still ordered
+
+	def test_tool_status_draft_po(self):
+		"""A draft (unsubmitted) Supplier PO yields a Draft tool status."""
+		company = self._company()
+		supplier = self._make_supplier()
+		part = make_test_item("_Test Tooling Part")
+		tool = make_test_item("_Test Tool Item", item_group="Tooling")
+		self.test_items.extend([part, tool])
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_projects.append(project.project_name)
+		po = self._make_purchase_order(supplier, company, [tool.item_code], submit=False)
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer_po_no": "PO-STATUS-2",
+				"tools": [
+					{
+						"part_number": part.item_code,
+						"tool_item": tool.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+		self.assertEqual(doc.tools[0].tool_status, "Draft")
+
+	def test_refresh_tool_statuses_pulls_latest(self):
+		"""The refresh helper re-syncs statuses from the PO without editing the order."""
+		company = self._company()
+		supplier = self._make_supplier()
+		part = make_test_item("_Test Tooling Part")
+		tool = make_test_item("_Test Tool Item", item_group="Tooling")
+		self.test_items.extend([part, tool])
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_projects.append(project.project_name)
+		po = self._make_purchase_order(supplier, company, [tool.item_code])
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer_po_no": "PO-STATUS-3",
+				"tools": [
+					{
+						"part_number": part.item_code,
+						"tool_item": tool.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+		self.assertEqual(doc.tools[0].tool_status, "Ordered")
+
+		# Receipt happens later (no order edit); refresh should pull it.
+		poi = frappe.get_all(
+			"Purchase Order Item", filters={"parent": po, "item_code": tool.item_code}, fields=["name", "qty"]
+		)[0]
+		frappe.db.set_value("Purchase Order Item", poi.name, "received_qty", poi.qty)
+
+		result = refresh_tool_statuses(doc.name)
+		self.assertEqual(result["updated"], 1)
+		doc.reload()
+		self.assertEqual(doc.tools[0].tool_status, "Received")
+
+	def test_tool_status_not_on_po(self):
+		"""A tool linked to a PO that doesn't contain it reads as 'Not on PO'."""
+		company = self._company()
+		supplier = self._make_supplier()
+		part = make_test_item("_Test Tooling Part")
+		tool_on_po = make_test_item("_Test Tool On PO", item_group="Tooling")
+		tool_off_po = make_test_item("_Test Tool Off PO", item_group="Tooling")
+		self.test_items.extend([part, tool_on_po, tool_off_po])
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_projects.append(project.project_name)
+		# PO contains only tool_on_po; the tooling line references tool_off_po.
+		po = self._make_purchase_order(supplier, company, [tool_on_po.item_code])
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer_po_no": "PO-NOTON-1",
+				"tools": [
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_off_po.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+		self.assertEqual(doc.tools[0].tool_status, "Not on PO")
+
+	def test_report_tool_status_is_live_per_line(self):
+		"""The register computes tool status live per PO line, without re-saving the order."""
+		company = self._company()
+		supplier = self._make_supplier()
+		part = make_test_item("_Test Tooling Part")
+		tool_a = make_test_item("_Test Tool A", item_group="Tooling")
+		tool_b = make_test_item("_Test Tool B", item_group="Tooling")
+		self.test_items.extend([part, tool_a, tool_b])
+		project = make_test_project_with_parts("_Test Tooling Project", [part.item_code])
+		self.test_projects.append(project.project_name)
+		po = self._make_purchase_order(supplier, company, [tool_a.item_code, tool_b.item_code])
+		doc = frappe.get_doc(
+			{
+				"doctype": "NPD Tooling",
+				"project": project.name,
+				"customer_po_no": "PO-RPT-1",
+				"tools": [
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_a.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+					{
+						"part_number": part.item_code,
+						"tool_item": tool_b.item_code,
+						"qty": 1,
+						"rate": 100,
+						"supplier_po": po,
+					},
+				],
+			}
+		).insert(ignore_permissions=True)
+		self.test_tooling.append(doc.name)
+
+		# Receive only tool A after the order was saved — the report reflects it live.
+		poi = frappe.get_all(
+			"Purchase Order Item",
+			filters={"parent": po, "item_code": tool_a.item_code},
+			fields=["name", "qty"],
+		)[0]
+		frappe.db.set_value("Purchase Order Item", poi.name, "received_qty", poi.qty)
+
+		_columns, data = run_recovery_register({"project": doc.project})
+		by_tool = {r["tool_item"]: r["tool_status"] for r in data if r["order"] == doc.name}
+		self.assertEqual(by_tool[tool_a.item_code], "Received")
+		self.assertEqual(by_tool[tool_b.item_code], "Ordered")
 
 	def test_recovery_from_invoice_payment(self):
 		"""Recovery derives from invoice outstanding: nothing until paid, full once paid."""

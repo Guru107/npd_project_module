@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import date_diff, flt, getdate, today
+from frappe.utils import cint, date_diff, flt, getdate, today
 
 
 class NPDTooling(Document):
@@ -30,6 +30,7 @@ class NPDTooling(Document):
 
 	def validate(self):
 		self._set_line_amounts_and_total()
+		self._set_tool_statuses()
 		self._set_payment_allocations()
 
 	def _set_line_amounts_and_total(self):
@@ -39,6 +40,12 @@ class NPDTooling(Document):
 			row.amount = flt(row.qty) * flt(row.rate)
 			total += flt(row.amount)
 		self.total_tooling_amount = total
+
+	def _set_tool_statuses(self):
+		"""Derive each tool line's status from its matching Supplier PO line item."""
+		statuses = get_tool_po_statuses((row.supplier_po, row.tool_item) for row in self.tools)
+		for row in self.tools:
+			row.tool_status = statuses.get((row.supplier_po, row.tool_item))
 
 	def _set_payment_allocations(self):
 		"""Default and sanity-check the amount allocated from each receipt to this PO.
@@ -162,6 +169,65 @@ def compute_recovered(invoice_figures, payment_allocations, payments_on_invoice)
 	on_invoice = set(payments_on_invoice or ())
 	advances = sum(flt(amt) for pe, amt in payment_allocations if pe not in on_invoice)
 	return invoice_paid + advances
+
+
+def compute_tool_status(docstatus, po_item_rows):
+	"""Derive a tool's status from its PO docstatus and matching PO Item line(s).
+
+	Pure and side-effect-free so the single lookup and the report's batched path share
+	one rule set. `po_item_rows` are the Purchase Order Item rows (each with qty and
+	received_qty) for this tool on a submitted PO. Returns one of Draft / Ordered /
+	Partially Received / Received / Cancelled / Not on PO, or None when the PO is missing.
+	"""
+	if docstatus is None:
+		return None
+	ds = cint(docstatus)
+	if ds == 2:
+		return "Cancelled"
+	if ds == 0:
+		return "Draft"
+	if not po_item_rows:
+		# Submitted PO, but this tool isn't one of its line items.
+		return "Not on PO"
+
+	total_qty = sum(flt(r["qty"]) for r in po_item_rows)
+	received_qty = sum(flt(r["received_qty"]) for r in po_item_rows)
+	if received_qty <= 0:
+		return "Ordered"
+	if received_qty >= total_qty:
+		return "Received"
+	return "Partially Received"
+
+
+def get_tool_po_statuses(tool_refs):
+	"""Per-tool PO status for many tools at once (two queries for the whole set).
+
+	`tool_refs` is an iterable of ``(supplier_po, tool_item)`` pairs; returns a dict keyed
+	by that pair. Status is per-tool, not per-PO: on a PO with several tools, each tool
+	reflects its own line's receipt state. A pair with no Supplier PO (or a missing PO)
+	maps to None. See compute_tool_status for the derived values.
+	"""
+	refs = list(tool_refs)
+	purchase_orders = list({po for po, _item in refs if po})
+
+	docstatus_map = {}
+	items_map = {}
+	if purchase_orders:
+		for po in frappe.get_all(
+			"Purchase Order", filters={"name": ["in", purchase_orders]}, fields=["name", "docstatus"]
+		):
+			docstatus_map[po.name] = po.docstatus
+		for r in frappe.get_all(
+			"Purchase Order Item",
+			filters={"parent": ["in", purchase_orders]},
+			fields=["parent", "item_code", "qty", "received_qty"],
+		):
+			items_map.setdefault((r.parent, r.item_code), []).append(r)
+
+	return {
+		(po, item): compute_tool_status(docstatus_map.get(po), items_map.get((po, item), []))
+		for po, item in refs
+	}
 
 
 def compute_recovery_status(target, recovered):

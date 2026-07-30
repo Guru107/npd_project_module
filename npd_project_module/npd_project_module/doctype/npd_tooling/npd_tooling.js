@@ -42,10 +42,20 @@ frappe.ui.form.on("NPD Tooling", {
 			return;
 		}
 
-		// Recovery figures are computed live from the linked Sales Invoices; reload to refresh.
-		frm.add_custom_button(__("Refresh Recovery"), function () {
-			frm.reload_doc();
-			frappe.show_alert({ message: __("Recovery figures refreshed."), indicator: "green" });
+		// Tool statuses are derived from the Supplier PO lines and recovery from the linked
+		// invoices; pull the latest PO receipt state, then reload to refresh both.
+		frm.add_custom_button(__("Refresh Status"), function () {
+			frappe.call({
+				method: "npd_project_module.utils.tooling_utils.refresh_tool_statuses",
+				args: { tooling: frm.doc.name },
+				callback: function () {
+					frm.reload_doc();
+					frappe.show_alert({
+						message: __("Refreshed tool statuses and recovery."),
+						indicator: "green",
+					});
+				},
+			});
 		});
 	},
 });
