@@ -44,7 +44,7 @@ frappe.ui.form.on("NPD Tooling", {
 
 		// Tool statuses are derived from the Supplier PO lines and recovery from the linked
 		// invoices; pull the latest PO receipt state, then reload to refresh both.
-		frm.add_custom_button(__("Refresh from ERPNext"), function () {
+		frm.add_custom_button(__("Refresh Status"), function () {
 			frappe.call({
 				method: "npd_project_module.utils.tooling_utils.refresh_tool_statuses",
 				args: { tooling: frm.doc.name },
